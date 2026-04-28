@@ -43,7 +43,7 @@ async def save_records(records: list, company_id: int):
     for r in records:
         service = r.get("services", [])
         service_title = service[0].get("title", "") if service else ""
-        service_cost = service[0].get("cost", 0) if service else 0
+        service_cost = int(float(service[0].get("cost", 0))) if service else 0
         client = r.get("client") or {}
 
         rows.append({
@@ -90,3 +90,11 @@ async def save_clients(clients: list, company_id: int):
 
     result = supabase.table("clients").upsert(rows, on_conflict="id").execute()
     return result.data
+
+async def get_salon(company_id: int):
+    result = supabase.table("salons").select("*").eq(
+        "company_id", company_id
+    ).execute()
+    if result.data:
+        return result.data[0]
+    return None

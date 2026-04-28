@@ -7,8 +7,8 @@ import hashlib
 import hmac
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from app.yclients import get_records, get_user_token
-from app.database import save_records, get_records_by_company, save_salon, get_all_salons
+from app.yclients import get_records, get_user_token, get_clients
+from app.database import save_records, get_records_by_company, save_salon, get_all_salons, save_clients, get_salon
 
 load_dotenv()
 
@@ -20,6 +20,32 @@ COMPANY_ID = int(os.getenv("YCLIENTS_COMPANY_ID"))
 
 
 # ============ ФОНОВАЯ СИНХРОНИЗАЦИЯ ============
+
+async def sync_clients_data(company_id: int, user_token: str):
+    print(f"[SYNC CLIENTS] Начинаем загрузку клиентов филиала {company_id}")
+    try:
+        all_clients = []
+        page = 1
+        while True:
+            data = await get_clients(
+                company_id=company_id,
+                user_token=user_token,
+                page=page
+            )
+            clients = data.get("data", [])
+            if not clients:
+                break
+            all_clients.extend(clients)
+            total = data.get("meta", {}).get("total_count", 0)
+            print(f"[SYNC CLIENTS] Получено {len(all_clients)} из {total}")
+            if len(all_clients) >= total:
+                break
+            page += 1
+
+        saved = await save_clients(all_clients, company_id)
+        print(f"[SYNC CLIENTS] Готово! Сохранено {len(saved) if saved else 0} клиентов")
+    except Exception as e:
+        print(f"[SYNC CLIENTS ERROR] {e}")
 
 async def sync_company_data(company_id: int, user_token: str, months: int = 12):
     """
@@ -164,11 +190,21 @@ async def sync_manual(background_tasks: BackgroundTasks):
         user_token=USER_TOKEN,
         months=12
     )
-return {
-    "status": "started",
-    "message": "Sync started in background. Check logs."
-}
+    return {
+        "status": "started",
+        "message": "Sync started in background. Check logs."
+    }
 
+@app.get("/sync/clients")
+async def sync_clients_manual(background_tasks: BackgroundTasks):
+    from app.database import get_salon
+    salon = await get_salon(COMPANY_ID)
+    background_tasks.add_task(
+        sync_clients_data,
+        company_id=COMPANY_ID,
+        user_token=salon["user_token"]
+    )
+    return {"status": "started", "message": "Clients sync started"}
 
 @app.get("/salons")
 async def salons():

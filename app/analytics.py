@@ -162,17 +162,14 @@ async def get_summary(company_id: int):
     prev_start = last_month.replace(day=1).strftime("%Y-%m-%d")
     prev_end = last_month.strftime("%Y-%m-%d")
     
-    # Выручка текущего месяца
     current_revenue = supabase.table("transactions").select(
         "amount"
     ).eq("company_id", company_id).gte("date", current_start).execute()
     
-    # Выручка прошлого месяца
     prev_revenue = supabase.table("transactions").select(
         "amount"
     ).eq("company_id", company_id).gte("date", prev_start).lte("date", prev_end).execute()
     
-    # Записи текущего месяца
     current_records = supabase.table("records").select(
         "id, client_id"
     ).eq("company_id", company_id).gte("date", current_start).eq("attendance", 1).execute()

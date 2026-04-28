@@ -8,7 +8,7 @@ import os
 
 load_dotenv()
 
-from app.routers import sync, analytics, oauth, webhooks
+from app.routers import sync, analytics, oauth, webhooks, checks
 
 app = FastAPI(
     title="Insalon API",
@@ -43,6 +43,7 @@ app.include_router(sync.router)
 app.include_router(analytics.router)
 app.include_router(oauth.router)
 app.include_router(webhooks.router)
+app.include_router(checks.router)
 
 # Статические файлы дашборда
 if os.path.exists("static"):

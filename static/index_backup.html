@@ -74,18 +74,7 @@
         </div>
     </div>
  
-
-    <!-- Проверки данных -->
-    <div class="row g-3 mb-4">
-        <div class="col-12">
-            <div class="card p-4">
-                <h6 class="section-title">🔍 Качество данных <span id="checks-status" class="ms-2"></span></h6>
-                <div id="checks-list" class="loading">Загружаем...</div>
-            </div>
-        </div>
-    </div>
-
-        <!-- P&L отчёт -->
+    <!-- P&L отчёт -->
     <div class="row g-3 mb-4">
         <div class="col-12">
             <div class="card p-4">
@@ -95,10 +84,8 @@
                         <thead class="table-dark">
                             <tr>
                                 <th>Месяц</th>
-                                <th class="text-end">Услуги</th>
-                            <th class="text-end">Сертификаты</th>
-                            <th class="text-end">Абонементы</th>
-                            <th class="text-end">Fitmost</th>
+                                <th class="text-end">Выручка</th>
+                                <th class="text-end">Fitmost</th>
                                 <th class="text-end">Итого доходы</th>
                                 <th class="text-end">Зарплата</th>
                                 <th class="text-end">Аренда</th>
@@ -111,7 +98,7 @@
                             </tr>
                         </thead>
                         <tbody id="pl-body">
-                            <tr><td colspan="14" class="text-center text-muted">Загружаем...</td></tr>
+                            <tr><td colspan="11" class="text-center text-muted">Загружаем...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -260,45 +247,16 @@ async function loadChurn() {
     document.getElementById('churn-list').innerHTML = html;
 }
  
-async function loadChecks() {
-    const data = await fetchData('/checks/');
-    if (!data.summary) return;
-
-    document.getElementById('checks-status').innerHTML = data.summary.status;
-
-    let html = '';
-
-    if (data.errors.length === 0 && data.warnings.length === 0) {
-        html = '<p class="text-success">Все проверки пройдены успешно ✅</p>';
-    }
-
-    data.errors.forEach(e => {
-        html += `<div class="alert alert-danger py-2 mb-2">
-            <strong>❌ ${e.check}</strong> — ${e.count || ''} ${e.description}
-        </div>`;
-    });
-
-    data.warnings.forEach(w => {
-        html += `<div class="alert alert-warning py-2 mb-2">
-            <strong>⚠️ ${w.check}</strong>${w.count ? ' (' + w.count + ')' : ''} — ${w.description}
-        </div>`;
-    });
-
-    document.getElementById('checks-list').innerHTML = html;
-}
-
 async function loadPL() {
     const data = await fetchData('/analytics/pl');
     if (!data.months) return;
-
-    const html = [...data.months].reverse().filter(m => m.total_revenue > 0 || m.total_expenses > 0).map(m => {
+ 
+    const html = [...data.months].reverse().map(m => {
         const profitClass = m.profit >= 0 ? 'text-success fw-bold' : 'text-danger fw-bold';
         return `
         <tr>
             <td>${m.month}</td>
-            <td class="text-end">${formatMoney(m.revenue_services)}</td>
-            <td class="text-end">${formatMoney(m.revenue_certificates)}</td>
-            <td class="text-end">${formatMoney(m.revenue_abonements)}</td>
+            <td class="text-end">${formatMoney(m.revenue_direct)}</td>
             <td class="text-end">${formatMoney(m.revenue_fitmost)}</td>
             <td class="text-end fw-bold">${formatMoney(m.total_revenue)}</td>
             <td class="text-end text-danger">${formatMoney(m.salary)}</td>
@@ -311,7 +269,7 @@ async function loadPL() {
             <td class="text-end ${profitClass}">${formatMoney(m.profit)}</td>
         </tr>`;
     }).join('');
-
+ 
     document.getElementById('pl-body').innerHTML = html;
 }
  
@@ -325,8 +283,7 @@ async function init() {
         loadClientsChart(),
         loadServices(),
         loadChurn(),
-        loadPL(),
-        loadChecks()
+        loadPL()
     ]);
 }
  

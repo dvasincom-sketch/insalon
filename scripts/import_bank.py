@@ -14,6 +14,15 @@ supabase = create_client(
 
 COMPANY_ID = int(os.getenv("YCLIENTS_COMPANY_ID"))
 
+def parse_amount(amount_str: str, op_type: str) -> float:
+    try:
+        amount = float(amount_str.strip().replace(",", ".").replace(" ", ""))
+        if op_type == "Дебет":
+            amount = -amount
+        return amount
+    except:
+        return 0.0
+
 def parse_date(date_str: str):
     try:
         return datetime.strptime(date_str.strip(), "%d.%m.%Y").strftime("%Y-%m-%d")
@@ -21,30 +30,28 @@ def parse_date(date_str: str):
         return None
 
 def import_csv(filepath: str):
+    # Сначала очищаем старые данные
+    supabase.table("bank_transactions").delete().eq("company_id", COMPANY_ID).execute()
+    print("Старые данные удалены")
+
     rows = []
-    
+
     with open(filepath, encoding="utf-8-sig") as f:
         reader = csv.DictReader(f, delimiter=";")
         for row in reader:
             date = parse_date(row.get("Дата проведения", ""))
             if not date:
                 continue
-            
+
             op_type = row.get("Тип операции (пополнение/списание)", "").strip()
             category = row.get("Категория операции", "").strip()
             amount_str = row.get("Сумма в валюте счёта", "0").strip()
             description = row.get("Описание операции", "").strip()
             counterparty = row.get("Наименование контрагента", "").strip()
             inn = row.get("ИНН контрагента", "").strip()
-            
-            try:
-                amount = float(amount_str)
-            except:
-                amount = 0
-            
-            if op_type == "Дебет":
-                amount = -amount
-            
+
+            amount = parse_amount(amount_str, op_type)
+
             rows.append({
                 "company_id": COMPANY_ID,
                 "date": date,
@@ -55,9 +62,9 @@ def import_csv(filepath: str):
                 "counterparty": counterparty,
                 "inn": inn
             })
-    
+
     print(f"Всего строк: {len(rows)}")
-    
+
     batch_size = 100
     saved = 0
     for i in range(0, len(rows), batch_size):
@@ -65,7 +72,7 @@ def import_csv(filepath: str):
         result = supabase.table("bank_transactions").insert(batch).execute()
         saved += len(result.data)
         print(f"Загружено: {saved}/{len(rows)}")
-    
+
     print(f"Готово! Загружено {saved} транзакций")
 
 if __name__ == "__main__":

@@ -5,13 +5,44 @@ import json
 import traceback
 import hashlib
 import hmac
+from app.analytics import get_revenue_by_weeks, get_new_vs_returning, get_churn_risk, get_top_services, get_summary
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from app.yclients import get_records, get_user_token, get_clients, get_staff, get_services, get_transactions
 from app.database import save_records, get_records_by_company, save_salon, get_all_salons, save_clients, get_salon, save_staff, save_services, save_transactions
 load_dotenv()
 
+from fastapi.responses import JSONResponse
+import json
+
 app = FastAPI(title="Insalon API")
+from fastapi.responses import JSONResponse
+import json
+
+class UTF8JSONResponse(JSONResponse):
+    media_type = "application/json; charset=utf-8"
+    
+    def render(self, content) -> bytes:
+        return json.dumps(
+            content,
+            ensure_ascii=False,
+            allow_nan=False,
+            indent=None,
+            separators=(",", ":")
+        ).encode("utf-8")
+
+app.router.default_response_class = UTF8JSONResponse
+
+@app.middleware("http")
+async def fix_charset(request, call_next):
+    response = await call_next(request)
+    return response
+
+class UnicodeJSONResponse(JSONResponse):
+    def render(self, content) -> bytes:
+        return json.dumps(content, ensure_ascii=False).encode("utf-8")
+
+app.router.default_response_class = UnicodeJSONResponse
 
 PARTNER_TOKEN = os.getenv("YCLIENTS_PARTNER_TOKEN", "").strip()
 USER_TOKEN = os.getenv("YCLIENTS_USER_TOKEN", "").strip()
@@ -316,5 +347,46 @@ async def auth(login: str, password: str):
     try:
         token = await get_user_token(login, password)
         return {"user_token": token}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/analytics/summary")
+async def analytics_summary():
+    try:
+        data = await get_summary(COMPANY_ID)
+        return data
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/analytics/revenue")
+async def analytics_revenue(weeks: int = 12):
+    try:
+        data = await get_revenue_by_weeks(COMPANY_ID, weeks)
+        return data
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/analytics/clients")
+async def analytics_clients(weeks: int = 12):
+    try:
+        data = await get_new_vs_returning(COMPANY_ID, weeks)
+        return data
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/analytics/churn")
+async def analytics_churn(days: int = 45):
+    try:
+        data = await get_churn_risk(COMPANY_ID, days)
+        return data
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/analytics/services")
+async def analytics_services():
+    try:
+        data = await get_top_services(COMPANY_ID)
+        return data
     except Exception as e:
         return {"error": str(e)}

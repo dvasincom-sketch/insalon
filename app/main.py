@@ -164,10 +164,10 @@ async def sync_manual(background_tasks: BackgroundTasks):
         user_token=USER_TOKEN,
         months=12
     )
-    return {
-        "status": "started",
-        "message": "Синхронизация запущена в фоне. Смотрите логи в терминале."
-    }
+return {
+    "status": "started",
+    "message": "Sync started in background. Check logs."
+}
 
 
 @app.get("/salons")

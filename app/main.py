@@ -7,9 +7,8 @@ import hashlib
 import hmac
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from app.yclients import get_records, get_user_token, get_clients
-from app.database import save_records, get_records_by_company, save_salon, get_all_salons, save_clients, get_salon
-
+from app.yclients import get_records, get_user_token, get_clients, get_staff, get_services, get_transactions
+from app.database import save_records, get_records_by_company, save_salon, get_all_salons, save_clients, get_salon, save_staff, save_services, save_transactions
 load_dotenv()
 
 app = FastAPI(title="Insalon API")
@@ -224,6 +223,91 @@ async def db_records():
         return {"count": len(records), "records": records}
     except Exception as e:
         return {"error": str(e)}
+
+@app.get("/sync/all")
+
+async def sync_all(background_tasks: BackgroundTasks):
+    try:
+        salon = await get_salon(COMPANY_ID)
+        if not salon:
+            return {"error": "Салон не найден"}
+
+        token = salon["user_token"]
+        print(f"[SYNC ALL] Токен: {token[:8]}...")
+
+        staff_data = await get_staff(COMPANY_ID, token)
+        print(f"[SYNC ALL] Staff response: {staff_data}")
+
+        if staff_data.get("success"):
+            await save_staff(staff_data.get("data", []), COMPANY_ID)
+            print(f"[SYNC] Сотрудники: {len(staff_data.get('data', []))}")
+
+        services_data = await get_services(COMPANY_ID, token)
+        if services_data.get("success"):
+            await save_services(services_data.get("data", []), COMPANY_ID)
+            print(f"[SYNC] Услуги: {len(services_data.get('data', []))}")
+
+        background_tasks.add_task(sync_transactions_data, COMPANY_ID, token)
+
+        return {"status": "started", "message": "Sync all started"}
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "trace": traceback.format_exc()}
+    
+    salon = await get_salon(COMPANY_ID)
+    if not salon:
+        return {"error": "Салон не найден"}
+
+    token = salon["user_token"]
+
+    staff_data = await get_staff(COMPANY_ID, token)
+    if staff_data.get("success"):
+        await save_staff(staff_data.get("data", []), COMPANY_ID)
+        print(f"[SYNC] Сотрудники: {len(staff_data.get('data', []))}")
+
+    services_data = await get_services(COMPANY_ID, token)
+    if services_data.get("success"):
+        await save_services(services_data.get("data", []), COMPANY_ID)
+        print(f"[SYNC] Услуги: {len(services_data.get('data', []))}")
+
+    background_tasks.add_task(sync_transactions_data, COMPANY_ID, token)
+
+    return {"status": "started", "message": "Sync all started"}
+
+
+async def sync_transactions_data(company_id: int, user_token: str):
+    from datetime import datetime, timedelta
+    print(f"[SYNC TRANSACTIONS] Начинаем загрузку транзакций")
+    end_date = datetime.now().strftime("%Y-%m-%d")
+    start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+
+    try:
+        all_transactions = []
+        page = 1
+        while True:
+            data = await get_transactions(
+                company_id=company_id,
+                user_token=user_token,
+                start_date=start_date,
+                end_date=end_date,
+                page=page
+            )
+            items = data.get("data", [])
+            if not items:
+                break
+            all_transactions.extend(items)
+            print(f"[SYNC TRANSACTIONS] Страница {page}: получено {len(items)} транзакций")
+            # Если получили меньше 100 — это последняя страница
+            if len(items) < 100:
+                break
+            page += 1
+
+        saved = await save_transactions(all_transactions, company_id)
+        print(f"[SYNC TRANSACTIONS] Готово! Сохранено {len(saved) if saved else 0}")
+    except Exception as e:
+        print(f"[SYNC TRANSACTIONS ERROR] {e}")
+        import traceback
+        print(traceback.format_exc())
 
 
 @app.get("/auth")

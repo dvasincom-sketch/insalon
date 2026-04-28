@@ -56,3 +56,32 @@ async def get_clients(company_id: int, user_token: str, page: int = 1):
             params={"page": page, "count": 200}
         )
         return response.json()
+async def get_staff(company_id: int, user_token: str):
+    async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+        response = await client.get(
+            f"{BASE_URL}/company/{company_id}/staff",
+            headers=get_auth_headers(user_token)
+        )
+        return response.json()
+
+async def get_services(company_id: int, user_token: str):
+    async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+        response = await client.get(
+            f"{BASE_URL}/services/{company_id}",
+            headers=get_auth_headers(user_token)
+        )
+        return response.json()
+
+async def get_transactions(company_id: int, user_token: str, start_date: str, end_date: str, page: int = 1):
+    async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+        response = await client.get(
+            f"{BASE_URL}/transactions/{company_id}",
+            headers=get_auth_headers(user_token),
+            params={
+                "start_date": start_date,
+                "end_date": end_date,
+                "page": page,
+                "count": 100
+            }
+        )
+        return response.json()

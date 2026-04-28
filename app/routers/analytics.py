@@ -14,7 +14,21 @@ router = APIRouter(prefix="/analytics", tags=["Аналитика"])
 COMPANY_ID = int(os.getenv("YCLIENTS_COMPANY_ID"))
 
 
-@router.get("/summary", summary="Сводка за месяц", description="Выручка, визиты и уникальные клиенты за текущий и прошлый месяц.")
+def fetch_all(supabase, query_fn):
+    """Получить все записи с пагинацией"""
+    all_data = []
+    page_size = 1000
+    offset = 0
+    while True:
+        result = query_fn().range(offset, offset + page_size - 1).execute()
+        all_data.extend(result.data)
+        if len(result.data) < page_size:
+            break
+        offset += page_size
+    return all_data
+
+
+@router.get("/summary", summary="Сводка за месяц")
 async def analytics_summary():
     try:
         return await get_summary(COMPANY_ID)
@@ -22,7 +36,7 @@ async def analytics_summary():
         return {"error": str(e)}
 
 
-@router.get("/revenue", summary="Выручка по неделям", description="Выручка по неделям за последние N недель.")
+@router.get("/revenue", summary="Выручка по неделям")
 async def analytics_revenue(weeks: int = 12):
     try:
         return await get_revenue_by_weeks(COMPANY_ID, weeks)
@@ -30,7 +44,7 @@ async def analytics_revenue(weeks: int = 12):
         return {"error": str(e)}
 
 
-@router.get("/clients", summary="Новые vs повторные клиенты", description="Разбивка клиентов по неделям.")
+@router.get("/clients", summary="Новые vs повторные клиенты")
 async def analytics_clients(weeks: int = 12):
     try:
         return await get_new_vs_returning(COMPANY_ID, weeks)
@@ -38,7 +52,7 @@ async def analytics_clients(weeks: int = 12):
         return {"error": str(e)}
 
 
-@router.get("/churn", summary="Риск оттока клиентов", description="Клиенты которые не приходили более N дней.")
+@router.get("/churn", summary="Риск оттока клиентов")
 async def analytics_churn(days: int = 45):
     try:
         return await get_churn_risk(COMPANY_ID, days)
@@ -46,7 +60,7 @@ async def analytics_churn(days: int = 45):
         return {"error": str(e)}
 
 
-@router.get("/services", summary="Топ услуги по выручке", description="Рейтинг услуг по выручке и среднему чеку.")
+@router.get("/services", summary="Топ услуги по выручке")
 async def analytics_services():
     try:
         return await get_top_services(COMPANY_ID)
@@ -54,53 +68,34 @@ async def analytics_services():
         return {"error": str(e)}
 
 
-@router.get("/pl", summary="P&L по месяцам", description="Доходы и расходы по месяцам с разбивкой по категориям.")
+@router.get("/pl", summary="P&L по месяцам")
 async def analytics_pl():
     try:
         from app.database import supabase
 
-        # Выручка из транзакций YCLIENTS (более точный источник)
-        transactions_data = supabase.table("transactions").select(
-            "date, amount, type_title"
-        ).eq("company_id", COMPANY_ID).gt("amount", 0).execute()
+        # Загружаем все данные с пагинацией
+        transactions_data = fetch_all(supabase, lambda: supabase.table("transactions").select("date, amount, type_title").eq("company_id", COMPANY_ID).gt("amount", 0))
 
-        # Fitmost доходы из банка
-        fitmost_data = supabase.table("bank_transactions").select(
-            "period, date, amount"
-        ).eq("company_id", COMPANY_ID).eq("type", "Кредит").ilike(
-            "counterparty", "%фитмост%"
-        ).execute()
+        fitmost_data = fetch_all(supabase, lambda: supabase.table("bank_transactions").select("period, date, amount").eq("company_id", COMPANY_ID).eq("type", "Кредит").ilike("counterparty", "%фитмост%"))
 
-        # Расходы из физической карты
-        expenses_data = supabase.table("personal_transactions").select(
-            "date, amount, expense_category"
-        ).eq("company_id", COMPANY_ID).lt("amount", 0).not_.in_(
-            "expense_category", ["internal", "personal", "transfer_in"]
-        ).execute()
+        expenses_data = fetch_all(supabase, lambda: supabase.table("personal_transactions").select("date, amount, expense_category").eq("company_id", COMPANY_ID).lt("amount", 0).not_.in_("expense_category", ["internal", "personal", "transfer_in"]))
 
-        # Банковские комиссии
-        bank_fees_data = supabase.table("bank_transactions").select(
-            "date, amount"
-        ).eq("company_id", COMPANY_ID).eq("category", "bank_fee").lt("amount", 0).execute()
+        bank_fees_data = fetch_all(supabase, lambda: supabase.table("bank_transactions").select("date, amount").eq("company_id", COMPANY_ID).eq("category", "bank_fee").lt("amount", 0))
 
-        # Аренда салона из расчётного счёта
-        salon_rent_data = supabase.table("bank_transactions").select(
-            "period, date, amount, description"
-        ).eq("company_id", COMPANY_ID).eq("category", "salon_rent").lt("amount", 0).execute()
+        salon_rent_data = fetch_all(supabase, lambda: supabase.table("bank_transactions").select("period, date, amount, description").eq("company_id", COMPANY_ID).eq("category", "salon_rent").lt("amount", 0))
+
+        cosmetics_data = fetch_all(supabase, lambda: supabase.table("bank_transactions").select("date, amount").eq("company_id", COMPANY_ID).eq("category", "cosmetics").lt("amount", 0))
 
         monthly = defaultdict(lambda: {
-            "revenue_services": 0,
-            "revenue_certificates": 0,
-            "revenue_abonements": 0,
-            "revenue_fitmost": 0,
+            "revenue_services": 0, "revenue_certificates": 0,
+            "revenue_abonements": 0, "revenue_fitmost": 0,
             "salary": 0, "rent": 0, "materials": 0,
             "marketing": 0, "credit_card": 0, "it": 0,
             "equipment": 0, "transport": 0,
-            "bank_fees": 0, "other": 0
+            "bank_fees": 0, "cosmetics": 0, "other": 0
         })
 
-        # Считаем выручку по типам из транзакций
-        for t in transactions_data.data:
+        for t in transactions_data:
             month = t["date"][:7]
             amount = float(t["amount"] or 0)
             type_title = t.get("type_title", "")
@@ -111,15 +106,13 @@ async def analytics_pl():
             elif "абонемент" in type_title.lower():
                 monthly[month]["revenue_abonements"] += amount
 
-        # Fitmost доходы
-        for f in fitmost_data.data:
+        for f in fitmost_data:
             period = f.get("period") or f["date"]
             month = period[:7]
             monthly[month]["revenue_fitmost"] += float(f["amount"] or 0)
 
-        # Расходы с физической карты
         known_cats = ["salary", "rent", "materials", "marketing", "credit_card", "it", "equipment", "transport"]
-        for e in expenses_data.data:
+        for e in expenses_data:
             month = e["date"][:7]
             cat = e["expense_category"]
             amount = abs(float(e["amount"] or 0))
@@ -128,13 +121,15 @@ async def analytics_pl():
             else:
                 monthly[month]["other"] += amount
 
-        # Банковские комиссии
-        for b in bank_fees_data.data:
+        for b in bank_fees_data:
             month = b["date"][:7]
             monthly[month]["bank_fees"] += abs(float(b["amount"] or 0))
 
-        # Аренда салона
-        for r in salon_rent_data.data:
+        for c in cosmetics_data:
+            month = c["date"][:7]
+            monthly[month]["cosmetics"] += abs(float(c["amount"] or 0))
+
+        for r in salon_rent_data:
             period = r.get("period") or r["date"]
             month = period[:7]
             amount = abs(float(r["amount"] or 0))
@@ -147,13 +142,11 @@ async def analytics_pl():
         for month in sorted(monthly.keys()):
             d = monthly[month]
             total_revenue = (
-                d["revenue_services"] +
-                d["revenue_certificates"] +
-                d["revenue_abonements"] +
-                d["revenue_fitmost"]
+                d["revenue_services"] + d["revenue_certificates"] +
+                d["revenue_abonements"] + d["revenue_fitmost"]
             )
             total_expenses = sum([
-                d["salary"], d["rent"], d["materials"], d["marketing"],
+                d["salary"], d["rent"], d["materials"], d["cosmetics"], d["marketing"],
                 d["credit_card"], d["it"], d["equipment"], d["transport"],
                 d["bank_fees"], d["other"]
             ])
@@ -168,6 +161,7 @@ async def analytics_pl():
                 "salary": round(d["salary"]),
                 "rent": round(d["rent"]),
                 "materials": round(d["materials"]),
+                "cosmetics": round(d["cosmetics"]),
                 "marketing": round(d["marketing"]),
                 "bank_fees": round(d["bank_fees"]),
                 "other": round(d["credit_card"] + d["it"] + d["equipment"] + d["transport"] + d["other"]),

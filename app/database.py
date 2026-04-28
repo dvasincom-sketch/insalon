@@ -58,7 +58,8 @@ async def save_records(records: list, company_id: int):
             "date": r.get("date"),
             "attendance": r.get("attendance", 0),
             "online": r.get("online", False),
-            "record_from": r.get("record_from", "")
+            "record_from": r.get("record_from", ""),
+            "duration": int(r.get("seance_length", 0))
         })
 
     result = supabase.table("records").upsert(rows, on_conflict="id").execute()

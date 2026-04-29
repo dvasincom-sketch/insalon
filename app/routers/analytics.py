@@ -173,3 +173,63 @@ async def analytics_pl():
     except Exception as e:
         import traceback
         return {"error": str(e), "trace": traceback.format_exc()}
+
+
+@router.get("/obligations/{year}/{month}", summary="Обязательства на месяц", description="Список всех ожидаемых платежей на указанный месяц.")
+async def obligations_for_month(year: int, month: int):
+    try:
+        from app.database import supabase
+        from datetime import date
+        
+        target_date = date(year, month, 1)
+        
+        result = supabase.table("obligations").select("*").eq(
+            "company_id", COMPANY_ID
+        ).eq("is_active", True).execute()
+        
+        obligations = []
+        for o in result.data:
+            start = date.fromisoformat(o["start_date"]) if o.get("start_date") else None
+            end = date.fromisoformat(o["end_date"]) if o.get("end_date") else None
+            
+            # Проверяем входит ли в период
+            if start and start > target_date:
+                continue
+            if end and end < target_date:
+                continue
+                
+            obligations.append({
+                "description": o["description"],
+                "amount": o["amount"],
+                "day_of_month": o["day_of_month"],
+                "type": o["type"],
+                "project": o["project"],
+                "expense_category": o["expense_category"],
+                "notes": o["notes"]
+            })
+        
+        # Сортируем по дню месяца
+        obligations.sort(key=lambda x: x["day_of_month"] or 99)
+        
+        total_fixed = sum(o["amount"] for o in obligations if o["type"] == "periodic_fixed")
+        total_variable = sum(o["amount"] for o in obligations if o["type"] == "periodic_variable")
+        total_debt = sum(o["amount"] for o in obligations if o["type"] == "debt")
+        
+        salon_total = sum(o["amount"] for o in obligations if o["project"] == "salon")
+        personal_total = sum(o["amount"] for o in obligations if o["project"] == "personal")
+        
+        return {
+            "month": f"{year}-{month:02d}",
+            "obligations": obligations,
+            "summary": {
+                "fixed": round(total_fixed),
+                "variable": round(total_variable),
+                "debt": round(total_debt),
+                "salon": round(salon_total),
+                "personal": round(personal_total),
+                "total": round(total_fixed + total_variable + total_debt)
+            }
+        }
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "trace": traceback.format_exc()}

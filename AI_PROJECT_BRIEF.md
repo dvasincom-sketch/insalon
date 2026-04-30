@@ -535,3 +535,67 @@ SUPABASE_URL=https://qtxnpnioobocidbujbja.supabase.co
 - Фильтр Статус НЕ загружает данные автоматически при входе в таб — только при выборе месяца
 - После смены месяца в Статусе — `checks-body` очищается до "Загрузка..." перед запросом
 
+
+---
+
+## 10. DATABASE SCHEMA REFERENCE
+
+> Актуально на 30.04.2026. Использовать в новых сессиях без повторных запросов к БД.
+
+### `payroll`
+| Колонка | Тип | Описание |
+|---|---|---|
+| company_id | integer | 1166484 |
+| staff_name | text | Имя мастера |
+| period_start | date | Начало периода (1-е или 15-е) |
+| period_end | date | Конец периода (14-е или последний день) |
+| payment_date | date | Дата выплаты (null если не выплачено) |
+| shifts | integer | Количество смен |
+| shift_pay | integer | Оплата за смены (кол-во × 5000) |
+| visit_pay | integer | Оплата выходов под запись |
+| bonus_loyalty | integer | Бонус продаж / лояльности |
+| bonus | integer | Прочие бонусы (премия, переработка) |
+| advance_cash | integer | Аванс наличными |
+| advance_transfer | integer | Аванс/выплата переводом |
+| expenses_reimbursement | integer | Компенсация расходов (отрицательное = долг) |
+| total_accrued | integer | shift_pay + visit_pay + bonus_loyalty + bonus + expenses_reimbursement |
+| total_paid | integer | advance_cash + advance_transfer |
+| balance | integer | total_accrued - total_paid |
+| notes | text | Детализация: смены, авансы, бонусы |
+
+Логика периодов: 1–14 и 15–последний день. Выплата остатка за период 1 — 15-го. За период 2 — 1-го следующего месяца.
+
+### `shifts`
+| Колонка | Тип | Описание |
+|---|---|---|
+| company_id | integer | 1166484 |
+| date | date | Дата смены |
+| staff_name | text | Имя мастера |
+| shift_pay | integer | 5000 обычно, 0 если выход под запись |
+| is_double_shift | boolean | true = двойная смена (2 мастера в день) |
+| is_visit_only | boolean | true = выход под запись, не полная смена |
+| notes | text | Комментарий |
+
+Логика двойных смен: оба мастера по 5000₽, выручка дня ÷ 2 при расчёте эффективности.
+
+### `visit_records`
+| Колонка | Тип | Описание |
+|---|---|---|
+| date | date | Дата выхода |
+| staff_name | text | Имя мастера |
+| service_title | text | Название услуги (обычно "SPA для двоих") |
+| visit_pay | integer | Оплата выхода в рублях |
+| notes | text | Комментарий |
+
+### `personal_transactions`
+| Колонка | Тип | Описание |
+|---|---|---|
+| date | date | Дата операции |
+| amount | numeric | Сумма (отрицательная = расход) |
+| description | text | Контрагент (НЕ counterparty — такой колонки нет!) |
+| expense_category | text | Наша разметка: salary, materials, marketing, transport… |
+| project | text | Проект: salon, personal, podcast… |
+| period | date | Период начисления (важно для аренды/Fitmost) |
+
+Для сверки выплат мастерам: WHERE expense_category = 'salary' AND project = 'salon'.
+

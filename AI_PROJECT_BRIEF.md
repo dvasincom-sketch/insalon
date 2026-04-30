@@ -599,3 +599,69 @@ SUPABASE_URL=https://qtxnpnioobocidbujbja.supabase.co
 
 Для сверки выплат мастерам: WHERE expense_category = 'salary' AND project = 'salon'.
 
+
+---
+
+## 11. DATA GOVERNANCE (Solid-Finance)
+
+> Добавлено 30.04.2026
+
+### Классификация данных
+
+| Уровень | Описание | Таблицы |
+|---|---|---|
+| DR1 (Sacred) | Первоисточники — неизменяемые | bank_transactions, personal_transactions, transactions, records |
+| DR2 (Calculated) | Производные из DR1 | shifts, visit_records, payroll |
+| DR3 (Manual) | Ручной контекст | notes, staff_payment_aliases, obligations |
+
+### Правила
+
+- DR1 таблицы: только INSERT через синхронизацию, запрещён UPDATE/DELETE
+- `payroll.balance` всегда = `total_accrued - total_paid` (триггер БД)
+- Любое изменение payroll логируется в `payroll_audit`
+
+### Триггеры
+
+- `payroll_balance_trigger` — BEFORE INSERT/UPDATE, пересчитывает balance
+- `payroll_audit_trigger` — AFTER UPDATE, пишет в payroll_audit
+
+---
+
+## 12. НОВЫЕ ТАБЛИЦЫ (30.04.2026)
+
+### `staff_payment_aliases`
+Маппинг имён мастеров к описаниям в personal_transactions
+
+| Поле | Тип | Описание |
+|---|---|---|
+| staff_name | text | Имя мастера в системе |
+| alias | text | Описание в выписке (например "Александра К.") |
+| company_id | integer | 1166484 |
+
+Текущий маппинг:
+- Мария → Александра К.
+- Александра → Александра Т.
+- Светлана → Светлана Б.
+- Екатерина → Екатерина Б.
+- Анастасия → Анастасия К.
+- Марина → Марина Ц.
+
+### `payroll_audit`
+Лог всех изменений payroll — кто что менял и когда.
+
+### Новые поля в `payroll`
+- `status` text — 'draft' (расчёт сохранён) / 'paid' (выплачено)
+- `offset_amount` integer — зачёт авансов/переплат из предыдущих периодов
+
+### Новые поля в `shifts`
+- `is_visit_only` boolean — выход под запись (не полная смена, shift_pay=0)
+
+---
+
+## 13. ПРАВИЛА РАБОТЫ С КОДОМ (обновлено 30.04.2026)
+
+- Данные смотреть **только через SQL в Supabase SQL Editor**
+- Скрипты писать в `/tmp/`: `cat > /tmp/fix.py << 'PYEOF'` → `python3 /tmp/fix.py`
+- zsh ломает heredoc со спецсимволами — всегда использовать файлы в /tmp/
+- Деплой только после локальной проверки на localhost:8000
+- Перед деплоем: `git add` → `git commit` → `git push`

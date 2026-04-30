@@ -434,6 +434,79 @@
         <div id="staff-tab-payroll" class="d-none">
           <div class="row row-deck row-cards">
             <div class="col-12">
+
+        <!-- Форма расчёта выплат -->
+        <div id="payout-calc-card" class="card mb-3" style="border: 2px solid #206bc4;">
+          <div class="card-header" style="background: #206bc4; color: white; cursor:pointer;" onclick="togglePayoutCalc()">
+            <h3 class="card-title mb-0" style="color:white;">
+              💰 Расчёт выплат на 1 мая 2026
+            </h3>
+            <div class="card-options">
+              <span id="payout-calc-toggle" style="color:white; font-size:1.2rem;">▲</span>
+            </div>
+          </div>
+          <div id="payout-calc-body">
+            <div class="card-body pb-0">
+              <div class="row g-2 align-items-end mb-3">
+                <div class="col-auto">
+                  <label class="form-label mb-1 fw-bold">Период</label>
+                  <select class="form-select" id="calc-period" onchange="loadCalcData()">
+                    <option value="2026-04-15">Апрель 2026 (15–30)</option>
+                    <option value="2026-04-01">Апрель 2026 (1–14)</option>
+                    <option value="2026-03-15">Март 2026 (15–31)</option>
+                    <option value="2026-03-01">Март 2026 (1–14)</option>
+                  </select>
+                </div>
+                <div class="col-auto">
+                  <button class="btn btn-primary" onclick="loadCalcData()">Загрузить данные</button>
+                </div>
+                <div class="col-auto ms-auto">
+                  <button class="btn btn-success" onclick="saveAllPayroll()">💾 Сохранить всё в payroll</button>
+                </div>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-vcenter card-table" id="calc-table">
+                <thead class="table-light">
+                  <tr>
+                    <th style="min-width:120px">Мастер</th>
+                    <th class="text-center" title="Из таблицы shifts">Смен<br><small class="text-muted">авто</small></th>
+                    <th class="text-center">Оплата<br>смен</th>
+                    <th class="text-center" title="Из visit_records">Выходов<br><small class="text-muted">авто</small></th>
+                    <th style="min-width:130px">Выходы ₽<br><small class="text-muted fw-normal">вручную</small></th>
+                    <th style="min-width:130px">Бонус ₽<br><small class="text-muted fw-normal">вручную</small></th>
+                    <th class="text-center">Начислено</th>
+                    <th style="min-width:130px">Аванс нал ₽<br><small class="text-muted fw-normal">вручную</small></th>
+                    <th style="min-width:130px">Аванс перевод ₽<br><small class="text-muted fw-normal">вручную</small></th>
+                    <th style="min-width:130px">Уже выплачено<br><small class="text-muted fw-normal">из payroll</small></th>
+                    <th class="text-center fw-bold text-green">К выплате</th>
+                    <th style="min-width:200px">Примечания</th>
+                  </tr>
+                </thead>
+                <tbody id="calc-tbody">
+                  <tr><td colspan="12" class="text-center text-muted py-4">Выберите период и нажмите «Загрузить данные»</td></tr>
+                </tbody>
+                <tfoot id="calc-tfoot" style="display:none">
+                  <tr class="table-dark fw-bold">
+                    <td>ИТОГО</td>
+                    <td class="text-center" id="calc-total-shifts">—</td>
+                    <td class="text-center" id="calc-total-shift-pay">—</td>
+                    <td class="text-center" id="calc-total-visits">—</td>
+                    <td></td>
+                    <td></td>
+                    <td class="text-center" id="calc-total-accrued">—</td>
+                    <td></td>
+                    <td></td>
+                    <td class="text-center" id="calc-total-already-paid">—</td>
+                    <td class="text-center text-green" id="calc-total-topay">—</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+
               <div class="card">
                 <div class="card-header">
                   <h3 class="card-title">Ведомость оплаты труда</h3>
@@ -1476,8 +1549,8 @@ async function loadChecks() {
 
       const payrollVisitCount = entries.length;
 
-      const periodStart = new Date(p.period_start);
-      const periodEnd = new Date(p.period_end);
+      const periodStart = new Date(p.period_start + 'T00:00:00');
+      const periodEnd = new Date(p.period_end + 'T23:59:59');
       const visitInPeriod = Object.entries(visitDays)
         .filter(([day]) => {
           const d = new Date(year, month-1, parseInt(day));
@@ -1643,5 +1716,240 @@ async function init() {
 
 init();
 </script>
+
+<script>
+// ===== РАСЧЁТ ВЫПЛАТ =====
+const STAFF_LIST = ['Александра','Светлана','Екатерина','Анастасия','Марина','Мария','Татьяна','София'];
+const SHIFT_PAY = 5000;
+let calcRows = {};
+
+function togglePayoutCalc() {
+  const body = document.getElementById('payout-calc-body');
+  const toggle = document.getElementById('payout-calc-toggle');
+  if (body.style.display === 'none') {
+    body.style.display = '';
+    toggle.textContent = '▲';
+  } else {
+    body.style.display = 'none';
+    toggle.textContent = '▼';
+  }
+}
+
+async function loadCalcData() {
+  const periodStart = document.getElementById('calc-period').value;
+  const d = new Date(periodStart + 'T00:00:00');
+  const year = d.getFullYear();
+  const month = d.getMonth() + 1;
+  const day = d.getDate();
+  const isFirstHalf = day === 1;
+  const periodEnd = isFirstHalf
+    ? new Date(year, month-1, 14).toISOString().slice(0,10)
+    : new Date(year, month, 0).toISOString().slice(0,10);
+
+  const tbody = document.getElementById('calc-tbody');
+  tbody.innerHTML = '<tr><td colspan="12" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div> Загрузка...</td></tr>';
+
+  const [shiftsData, visitsData, payrollData] = await Promise.all([
+    fetchData(`/analytics/shifts/${year}/${month}`),
+    fetchData(`/analytics/visit-records/${year}/${month}`),
+    fetchData(`/analytics/payroll?months=3`)
+  ]);
+
+  // Считаем смены по мастерам в периоде
+  const shiftsByStaff = {};
+  const shiftDaysByStaff = {};
+  (shiftsData?.shifts || []).forEach(s => {
+    if (s.is_visit_only) return;
+    const sDate = new Date(s.date + 'T00:00:00');
+    const pStart = new Date(periodStart + 'T00:00:00');
+    const pEnd = new Date(periodEnd + 'T23:59:59');
+    if (sDate < pStart || sDate > pEnd) return;
+    if (!shiftsByStaff[s.staff_name]) { shiftsByStaff[s.staff_name] = 0; shiftDaysByStaff[s.staff_name] = []; }
+    shiftsByStaff[s.staff_name]++;
+    shiftDaysByStaff[s.staff_name].push(parseInt(s.date.split('-')[2]));
+  });
+
+  // Считаем выходы под запись в периоде
+  const visitsByStaff = {};
+  const visitDaysList = {};
+  Object.entries(visitsData?.visit_days || {}).forEach(([dayNum, recs]) => {
+    const vDate = new Date(year, month-1, parseInt(dayNum));
+    const pStart = new Date(periodStart + 'T00:00:00');
+    const pEnd = new Date(periodEnd + 'T23:59:59');
+    if (vDate < pStart || vDate > pEnd) return;
+    recs.forEach(r => {
+      if (!visitsByStaff[r.staff_name]) { visitsByStaff[r.staff_name] = 0; visitDaysList[r.staff_name] = []; }
+      visitsByStaff[r.staff_name]++;
+      visitDaysList[r.staff_name].push(`${String(dayNum).padStart(2,'0')}.${String(month).padStart(2,'0')}=${r.visit_pay}`);
+    });
+  });
+
+  // Уже выплачено из payroll за этот период
+  const alreadyPaid = {};
+  (payrollData?.payroll || []).forEach(p => {
+    const ps = new Date(p.period_start + 'T00:00:00');
+    const calcPs = new Date(periodStart + 'T00:00:00');
+    if (ps.getTime() === calcPs.getTime()) {
+      alreadyPaid[p.staff_name] = {
+        paid: (p.advance_cash || 0) + (p.advance_transfer || 0),
+        advance_cash: p.advance_cash || 0,
+        advance_transfer: p.advance_transfer || 0,
+        notes: p.notes || ''
+      };
+    }
+  });
+
+  // Собираем список мастеров у кого есть смены или выходы
+  const staffInPeriod = new Set([
+    ...Object.keys(shiftsByStaff),
+    ...Object.keys(visitsByStaff)
+  ]);
+
+  calcRows = {};
+  let html = '';
+
+  staffInPeriod.forEach(name => {
+    const shifts = shiftsByStaff[name] || 0;
+    const shiftPay = shifts * SHIFT_PAY;
+    const visits = visitsByStaff[name] || 0;
+    const existingPaid = alreadyPaid[name] || { paid: 0, advance_cash: 0, advance_transfer: 0, notes: '' };
+    const shiftDays = (shiftDaysByStaff[name] || []).sort((a,b)=>a-b).join(',');
+    const visitNotes = (visitDaysList[name] || []).join('+');
+
+    calcRows[name] = { shifts, shiftPay, visits, shiftDays, visitNotes, periodStart, periodEnd };
+
+    html += `<tr id="calc-row-${name}">
+      <td><strong>${name}</strong><br><small class="text-muted">${shiftDays ? 'Смены: '+shiftDays : 'только выходы'}</small></td>
+      <td class="text-center">${shifts}</td>
+      <td class="text-center">${shiftPay.toLocaleString('ru-RU')} ₽</td>
+      <td class="text-center">${visits}</td>
+      <td><input type="number" class="form-control form-control-sm" id="visit-pay-${name}" 
+          value="${visits * 2000}" min="0" oninput="recalcRow('${name}')"
+          placeholder="сумма выходов"></td>
+      <td><input type="number" class="form-control form-control-sm" id="bonus-${name}" 
+          value="0" min="0" oninput="recalcRow('${name}')"
+          placeholder="бонус"></td>
+      <td class="text-center fw-bold" id="accrued-${name}">${(shiftPay + visits*2000).toLocaleString('ru-RU')} ₽</td>
+      <td><input type="number" class="form-control form-control-sm" id="adv-cash-${name}" 
+          value="${existingPaid.advance_cash}" min="0" oninput="recalcRow('${name}')"
+          placeholder="нал"></td>
+      <td><input type="number" class="form-control form-control-sm" id="adv-transfer-${name}" 
+          value="${existingPaid.advance_transfer}" min="0" oninput="recalcRow('${name}')"
+          placeholder="перевод"></td>
+      <td class="text-center text-muted" id="already-paid-${name}">${existingPaid.paid.toLocaleString('ru-RU')} ₽</td>
+      <td class="text-center fw-bold" id="topay-${name}">—</td>
+      <td><input type="text" class="form-control form-control-sm" id="notes-${name}" 
+          value="${existingPaid.notes}" placeholder="примечания"></td>
+    </tr>`;
+  });
+
+  if (!html) html = '<tr><td colspan="12" class="text-center text-muted py-4">Нет данных за выбранный период</td></tr>';
+  tbody.innerHTML = html;
+  document.getElementById('calc-tfoot').style.display = '';
+
+  staffInPeriod.forEach(name => recalcRow(name));
+  updateCalcTotals(staffInPeriod);
+}
+
+function recalcRow(name) {
+  const shiftPay = calcRows[name]?.shiftPay || 0;
+  const visitPay = parseInt(document.getElementById('visit-pay-'+name)?.value || 0);
+  const bonus = parseInt(document.getElementById('bonus-'+name)?.value || 0);
+  const advCash = parseInt(document.getElementById('adv-cash-'+name)?.value || 0);
+  const advTransfer = parseInt(document.getElementById('adv-transfer-'+name)?.value || 0);
+  const accrued = shiftPay + visitPay + bonus;
+  const totalPaid = advCash + advTransfer;
+  const toPay = accrued - totalPaid;
+
+  const accruedEl = document.getElementById('accrued-'+name);
+  const toPayEl = document.getElementById('topay-'+name);
+  if (accruedEl) accruedEl.textContent = accrued.toLocaleString('ru-RU') + ' ₽';
+  if (toPayEl) {
+    toPayEl.textContent = toPay.toLocaleString('ru-RU') + ' ₽';
+    toPayEl.className = 'text-center fw-bold ' + (toPay > 0 ? 'text-green' : toPay < 0 ? 'text-red' : 'text-muted');
+  }
+
+  const staffInPeriod = new Set(Object.keys(calcRows));
+  updateCalcTotals(staffInPeriod);
+}
+
+function updateCalcTotals(staffSet) {
+  let totalShifts=0, totalShiftPay=0, totalVisits=0, totalAccrued=0, totalAlreadyPaid=0, totalToPay=0;
+  staffSet.forEach(name => {
+    const r = calcRows[name] || {};
+    totalShifts += r.shifts || 0;
+    totalShiftPay += r.shiftPay || 0;
+    totalVisits += r.visits || 0;
+    const visitPay = parseInt(document.getElementById('visit-pay-'+name)?.value || 0);
+    const bonus = parseInt(document.getElementById('bonus-'+name)?.value || 0);
+    const advCash = parseInt(document.getElementById('adv-cash-'+name)?.value || 0);
+    const advTransfer = parseInt(document.getElementById('adv-transfer-'+name)?.value || 0);
+    const accrued = (r.shiftPay||0) + visitPay + bonus;
+    const paid = advCash + advTransfer;
+    totalAccrued += accrued;
+    totalAlreadyPaid += paid;
+    totalToPay += accrued - paid;
+  });
+  document.getElementById('calc-total-shifts').textContent = totalShifts;
+  document.getElementById('calc-total-shift-pay').textContent = totalShiftPay.toLocaleString('ru-RU') + ' ₽';
+  document.getElementById('calc-total-visits').textContent = totalVisits;
+  document.getElementById('calc-total-accrued').textContent = totalAccrued.toLocaleString('ru-RU') + ' ₽';
+  document.getElementById('calc-total-already-paid').textContent = totalAlreadyPaid.toLocaleString('ru-RU') + ' ₽';
+  const toPayEl = document.getElementById('calc-total-topay');
+  toPayEl.textContent = totalToPay.toLocaleString('ru-RU') + ' ₽';
+  toPayEl.className = 'text-center text-green fw-bold' + (totalToPay < 0 ? ' text-red' : '');
+}
+
+async function saveAllPayroll() {
+  const periodStart = document.getElementById('calc-period').value;
+  const staff = Object.keys(calcRows);
+  if (!staff.length) { alert('Нет данных для сохранения'); return; }
+
+  let saved = 0;
+  for (const name of staff) {
+    const r = calcRows[name];
+    const visitPay = parseInt(document.getElementById('visit-pay-'+name)?.value || 0);
+    const bonus = parseInt(document.getElementById('bonus-'+name)?.value || 0);
+    const advCash = parseInt(document.getElementById('adv-cash-'+name)?.value || 0);
+    const advTransfer = parseInt(document.getElementById('adv-transfer-'+name)?.value || 0);
+    const notes = document.getElementById('notes-'+name)?.value || '';
+    const accrued = r.shiftPay + visitPay + bonus;
+    const totalPaid = advCash + advTransfer;
+    const balance = accrued - totalPaid;
+
+    const body = {
+      staff_name: name,
+      period_start: r.periodStart,
+      period_end: r.periodEnd,
+      shifts: r.shifts,
+      shift_pay: r.shiftPay,
+      visit_pay: visitPay,
+      bonus_loyalty: bonus,
+      bonus: 0,
+      advance_cash: advCash,
+      advance_transfer: advTransfer,
+      expenses_reimbursement: 0,
+      total_accrued: accrued,
+      total_paid: totalPaid,
+      balance: balance,
+      notes: notes
+    };
+
+    try {
+      const resp = await fetch('/payroll/upsert', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+      });
+      if (resp.ok) saved++;
+    } catch(e) {
+      console.error('Ошибка сохранения', name, e);
+    }
+  }
+  alert(`✅ Сохранено ${saved} из ${staff.length} записей`);
+  await loadCalcData();
+}
+</script>
+
 </body>
 </html>

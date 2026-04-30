@@ -154,13 +154,11 @@ async def get_summary(company_id: int):
     """Сводка за текущий и прошлый месяц"""
     now = datetime.now()
     
-    # Текущий месяц
-    current_start = now.replace(day=1).strftime("%Y-%m-%d")
-    
-    # Прошлый месяц
-    last_month = now.replace(day=1) - timedelta(days=1)
-    prev_start = last_month.replace(day=1).strftime("%Y-%m-%d")
-    prev_end = last_month.strftime("%Y-%m-%d")
+    # Скользящие 30 дней
+    current_start = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    current_end = now.strftime("%Y-%m-%d")
+    prev_start = (now - timedelta(days=60)).strftime("%Y-%m-%d")
+    prev_end = (now - timedelta(days=31)).strftime("%Y-%m-%d")
     
     current_revenue = supabase.table("transactions").select(
         "amount"
@@ -173,16 +171,32 @@ async def get_summary(company_id: int):
     current_records = supabase.table("records").select(
         "id, client_id"
     ).eq("company_id", company_id).gte("date", current_start).eq("attendance", 1).execute()
-    
+
+    prev_records = supabase.table("records").select(
+        "id, client_id"
+    ).eq("company_id", company_id).gte("date", prev_start).lte("date", prev_end).eq("attendance", 1).execute()
+
     current_rev = sum(float(t["amount"]) for t in current_revenue.data)
     prev_rev = sum(float(t["amount"]) for t in prev_revenue.data)
-    
+
+    current_visits = len(current_records.data)
+    prev_visits = len(prev_records.data)
+    visits_growth = round((current_visits - prev_visits) / prev_visits * 100) if prev_visits > 0 else 0
+
+    current_clients = len(set(r["client_id"] for r in current_records.data if r["client_id"]))
+    prev_clients = len(set(r["client_id"] for r in prev_records.data if r["client_id"]))
+    clients_growth = round((current_clients - prev_clients) / prev_clients * 100) if prev_clients > 0 else 0
+
     growth = round((current_rev - prev_rev) / prev_rev * 100) if prev_rev > 0 else 0
-    
+
     return {
         "current_month_revenue": round(current_rev),
         "prev_month_revenue": round(prev_rev),
         "revenue_growth": growth,
-        "current_month_visits": len(current_records.data),
-        "unique_clients": len(set(r["client_id"] for r in current_records.data if r["client_id"]))
+        "current_month_visits": current_visits,
+        "prev_month_visits": prev_visits,
+        "visits_growth": visits_growth,
+        "unique_clients": current_clients,
+        "prev_unique_clients": prev_clients,
+        "clients_growth": clients_growth
     }

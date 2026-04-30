@@ -23,6 +23,81 @@ class PayrollUpsert(BaseModel):
     total_paid: int = 0
     balance: int = 0
     notes: Optional[str] = ""
+    status: str = "draft"
+
+@router.get("/period/{year}/{month}")
+async def get_period_payroll(year: int, month: int):
+    period_start_1 = f"{year}-{month:02d}-01"
+    period_start_2 = f"{year}-{month:02d}-15"
+    result = supabase.table("payroll").select("*").eq(
+        "company_id", COMPANY_ID
+    ).in_("period_start", [period_start_1, period_start_2]).execute()
+    return {"records": result.data}
+
+@router.get("/draft/{year}/{month}")
+async def get_draft_payroll(year: int, month: int):
+    period_start_1 = f"{year}-{month:02d}-01"
+    period_start_2 = f"{year}-{month:02d}-15"
+    result = supabase.table("payroll").select("*").eq(
+        "company_id", COMPANY_ID
+    ).eq("status", "draft").in_(
+        "period_start", [period_start_1, period_start_2]
+    ).execute()
+    return {"drafts": result.data}
+
+@router.post("/mark-paid")
+async def mark_paid(data: dict):
+    record_id = data.get("id")
+    if not record_id:
+        return {"error": "id required"}
+    status = data.get("status", "paid")
+    update_data = {"status": status}
+    if status == "paid":
+        update_data["total_paid"] = data.get("total_paid", 0)
+        update_data["balance"] = data.get("balance", 0)
+    supabase.table("payroll").update(update_data).eq("id", record_id).execute()
+    return {"status": "ok", "id": record_id}
+
+@router.get("/advances/{year}/{month}/{day}")
+async def get_advances(year: int, month: int, day: int):
+    """Получить выплаты мастерам из personal_transactions по алиасам"""
+    from datetime import date as dt
+    import calendar
+    
+    period_start = f"{year}-{month:02d}-{day:02d}"
+    is_second_half = day >= 15
+    if is_second_half:
+        last_day = calendar.monthrange(year, month)[1]
+        period_end = f"{year}-{month:02d}-{last_day:02d}"
+    else:
+        period_end = f"{year}-{month:02d}-14"
+    
+    # Получаем алиасы
+    aliases = supabase.table("staff_payment_aliases").select("*").eq(
+        "company_id", COMPANY_ID
+    ).execute()
+    
+    # Получаем транзакции за период
+    transactions = supabase.table("personal_transactions").select(
+        "date, amount, description"
+    ).eq("company_id", COMPANY_ID).eq(
+        "expense_category", "salary"
+    ).gte("date", period_start).lte("date", period_end).lt("amount", 0).execute()
+    
+    # Маппим по алиасам
+    result = {}
+    for alias_row in aliases.data:
+        staff = alias_row["staff_name"]
+        alias = alias_row["alias"]
+        payments = [
+            {"date": t["date"], "amount": abs(float(t["amount"]))}
+            for t in transactions.data
+            if t["description"] == alias
+        ]
+        if payments:
+            result[staff] = payments
+    
+    return {"advances": result, "period_start": period_start, "period_end": period_end}
 
 @router.post("/upsert")
 async def upsert_payroll(data: PayrollUpsert):
@@ -50,6 +125,7 @@ async def upsert_payroll(data: PayrollUpsert):
         "total_paid": data.total_paid,
         "balance": data.balance,
         "notes": data.notes,
+        "status": data.status,
     }
 
     if existing.data:

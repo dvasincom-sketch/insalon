@@ -1,0 +1,1646 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Insalon — Аналитика</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@latest/dist/css/tabler.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <style>
+    .stat-card { cursor: default; }
+    .north-star { background: linear-gradient(135deg, #206bc4 0%, #1a56db 100%); }
+    .danger-zone { background: linear-gradient(135deg, #d63939 0%, #c92a2a 100%); }
+    .slot-badge { font-size: 2rem; font-weight: 700; }
+    .obligation-bar { height: 8px; border-radius: 4px; background: #e9ecef; }
+    .obligation-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+    .heatmap-cell { 
+      width: 40px; height: 40px; border-radius: 4px; 
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 600; cursor: pointer;
+      transition: transform 0.1s;
+    }
+    .heatmap-cell:hover { transform: scale(1.1); }
+    .heat-0 { background: #f8f9fa; color: #adb5bd; }
+    .heat-1 { background: #d3f9d8; color: #2f9e44; }
+    .heat-2 { background: #8ce99a; color: #2b8a3e; }
+    .heat-3 { background: #40c057; color: white; }
+    .heat-4 { background: #2f9e44; color: white; }
+    .heat-5 { background: #1e7e34; color: white; }
+    .countdown-ring { font-size: 3rem; font-weight: 800; line-height: 1; }
+  </style>
+</head>
+<body class="antialiased">
+<div class="wrapper">
+
+  <!-- Sidebar -->
+  <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark">
+    <div class="container-fluid">
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar-menu">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <h1 class="navbar-brand navbar-brand-autodark">
+        <span>✨ Insalon</span>
+      </h1>
+      <div class="collapse navbar-collapse" id="sidebar-menu">
+        <ul class="navbar-nav pt-lg-3">
+          <li class="nav-item">
+            <a class="nav-link active" href="#" onclick="showScreen('pulse')">
+              <span class="nav-link-icon d-md-none d-lg-inline-block">
+                <i class="ti ti-activity"></i>
+              </span>
+              <span class="nav-link-title">Пульс системы</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#" onclick="showScreen('pl')">
+              <span class="nav-link-icon d-md-none d-lg-inline-block">
+                <i class="ti ti-report-money"></i>
+              </span>
+              <span class="nav-link-title">P&L</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#" onclick="showScreen('staff')">
+              <span class="nav-link-icon d-md-none d-lg-inline-block">
+                <i class="ti ti-users"></i>
+              </span>
+              <span class="nav-link-title">Сотрудники</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#" onclick="showScreen('obligations')">
+              <span class="nav-link-icon d-md-none d-lg-inline-block">
+                <i class="ti ti-calendar-due"></i>
+              </span>
+              <span class="nav-link-title">Обязательства</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <div class="page-wrapper">
+    
+    <!-- Header -->
+    <div class="page-header d-print-none">
+      <div class="container-xl">
+        <div class="row g-2 align-items-center">
+          <div class="col">
+            <h2 class="page-title" id="page-title">Пульс системы</h2>
+            <div class="text-muted mt-1" id="page-subtitle">HeadSPA — апрель 2026</div>
+          </div>
+          <div class="col-auto ms-auto">
+            <div class="badge bg-green-lt" id="last-updated">Загрузка...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 1: Пульс системы -->
+    <div class="page-body" id="screen-pulse">
+      <div class="container-xl">
+
+        <!-- Row 0: North Star + Основные KPI -->
+        <div class="row row-deck row-cards mb-3">
+          <!-- North Star: CM/LH -->
+          <div class="col-md-3">
+            <div class="card north-star text-white h-100">
+              <div class="card-body">
+                <div class="d-flex align-items-center mb-2">
+                  <i class="ti ti-star me-2" style="font-size:1.2rem"></i>
+                  <span class="text-white-75">North Star: CM/LH</span>
+                </div>
+                <div class="countdown-ring" id="ns-cmph">—</div>
+                <div class="text-white-75 mt-1">₽ за оплаченный час</div>
+                <div class="mt-2 d-flex align-items-center gap-2">
+                  <span class="badge bg-white-lt" id="ns-trend">считаем...</span>
+                  <span class="text-white-50 small" id="ns-detail"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card">
+              <div class="card-body">
+                <div class="text-muted mb-2">Выручка за 30 дней</div>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                  <div class="h1 mb-0" id="kpi-revenue">—</div>
+                  <div id="kpi-revenue-trend"></div>
+                </div>
+                <div class="text-muted small">Пред. 30 дней: <span class="fw-bold text-dark" id="kpi-prev-revenue">—</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card">
+              <div class="card-body">
+                <div class="text-muted mb-2">Визитов за 30 дней</div>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                  <div class="h1 mb-0" id="kpi-visits">—</div>
+                  <div id="kpi-visits-trend"></div>
+                </div>
+                <div class="text-muted small">Пред. 30 дней: <span class="fw-bold text-dark" id="kpi-prev-visits">—</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card">
+              <div class="card-body">
+                <div class="text-muted mb-2">Клиентов за 30 дней</div>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                  <div class="h1 mb-0" id="kpi-clients">—</div>
+                  <div id="kpi-clients-trend"></div>
+                </div>
+                <div class="text-muted small">Пред. 30 дней: <span class="fw-bold text-dark" id="kpi-prev-clients">—</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 0b: Графики -->
+        <div class="row row-deck row-cards mb-3">
+          <div class="col-md-8">
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">Выручка по неделям</h3>
+                <div class="card-options">
+                  <span class="badge bg-blue-lt">Нажмите на строку для детализации</span>
+                </div>
+              </div>
+              <div class="card-body p-0">
+                <div id="revenue-chart" class="px-3 pt-3"></div>
+                <table class="table table-hover table-vcenter mb-0" id="revenue-weeks-table">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Неделя</th>
+                      <th class="text-end">Выручка</th>
+                      <th class="text-end">vs пред. неделя</th>
+                      <th class="text-center">Детали</th>
+                    </tr>
+                  </thead>
+                  <tbody id="revenue-weeks-body">
+                    <tr><td colspan="4" class="text-center text-muted py-3">Загрузка...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">Новые vs Повторные</h3>
+              </div>
+              <div class="card-body">
+                <div id="clients-chart"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 1: North Star + ключевые метрики -->
+        <div class="row row-deck row-cards mb-3">
+          
+
+
+          <!-- Utilization Rate -->
+          <div class="col-md-4">
+            <div class="card">
+              <div class="card-body">
+                <div class="d-flex align-items-center mb-2">
+                  <i class="ti ti-gauge me-2 text-blue"></i>
+                  <span class="text-muted">Загрузка мастеров</span>
+                </div>
+                <div class="row align-items-center">
+                  <div class="col">
+                    <div class="h1 mb-0" id="util-rate">—%</div>
+                    <div class="text-muted">за последние 7 дней</div>
+                  </div>
+                  <div class="col-auto">
+                    <div id="util-chart"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Slot Perishability -->
+          <div class="col-md-4">
+            <div class="card">
+              <div class="card-body">
+                <div class="d-flex align-items-center mb-2">
+                  <i class="ti ti-clock-exclamation me-2 text-orange"></i>
+                  <span class="text-muted">Сгорающие слоты (48ч)</span>
+                </div>
+                <div class="row">
+                  <div class="col">
+                    <div class="h1 mb-0 text-orange" id="slots-empty">—</div>
+                    <div class="text-muted">свободных слотов</div>
+                  </div>
+                  <div class="col-auto">
+                    <div class="h1 mb-0 text-red" id="slots-cost">—</div>
+                    <div class="text-muted">потенц. потери ₽</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Row 2: Bridge Conversion + Revenue vs Obligations -->
+        <div class="row row-deck row-cards mb-3">
+          
+          <!-- Bridge Conversion -->
+          <div class="col-md-6">
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">
+                  <i class="ti ti-arrow-right me-1 text-green"></i>
+                  Bridge: SPA → Массаж
+                </h3>
+                <div class="card-options">
+                  <span class="badge bg-blue-lt" id="bridge-rate">—%</span>
+                </div>
+              </div>
+              <div class="card-body">
+                <div id="bridge-chart"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Revenue vs Obligations -->
+          <div class="col-md-6">
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">
+                  <i class="ti ti-calendar-due me-1 text-red"></i>
+                  Доход vs Обязательства (месяц)
+                </h3>
+              </div>
+              <div class="card-body">
+                <div class="row mb-3">
+                  <div class="col">
+                    <div class="text-muted mb-1">Доход за месяц</div>
+                    <div class="h2 mb-0 text-green" id="rev-month">—</div>
+                  </div>
+                  <div class="col-auto">
+                    <div class="text-muted mb-1">Обязательства</div>
+                    <div class="h2 mb-0 text-red" id="obl-month">—</div>
+                  </div>
+                </div>
+                <div class="obligation-bar mb-2">
+                  <div class="obligation-fill bg-green" id="obl-bar" style="width:0%"></div>
+                </div>
+                <div class="text-muted small" id="obl-comment">считаем...</div>
+                
+                <!-- Список ближайших обязательств -->
+                <div class="mt-3" id="obl-list"></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Row 3: Utilization Heatmap -->
+        <div class="row row-deck row-cards mb-3">
+          <div class="col-12">
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">
+                  <i class="ti ti-layout-grid me-1 text-blue"></i>
+                  Тепловая карта загрузки (последние 4 недели)
+                </h3>
+              </div>
+              <div class="card-body">
+                <div id="heatmap-container" class="d-flex gap-2 flex-wrap"></div>
+                <div class="d-flex gap-3 mt-3">
+                  <span class="text-muted small">Загрузка:</span>
+                  <span><span class="heatmap-cell heat-0 d-inline-flex" style="width:20px;height:20px;border-radius:3px"></span> 0%</span>
+                  <span><span class="heatmap-cell heat-2 d-inline-flex" style="width:20px;height:20px;border-radius:3px"></span> 25-50%</span>
+                  <span><span class="heatmap-cell heat-4 d-inline-flex" style="width:20px;height:20px;border-radius:3px"></span> 75%+</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Screen 2: P&L -->
+    <div class="page-body d-none" id="screen-pl">
+      <div class="container-xl">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">P&L по месяцам (только салон)</h3>
+            <div class="card-options">
+              <span class="badge bg-green-lt">Очищено от личных расходов</span>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-vcenter table-striped card-table">
+              <thead>
+                <tr>
+                  <th>Месяц</th>
+                  <th class="text-end">Услуги</th>
+                  <th class="text-end">Сертификаты</th>
+                  <th class="text-end">Абонементы</th>
+                  <th class="text-end">Fitmost</th>
+                  <th class="text-end fw-bold">Доходы</th>
+                  <th class="text-end">Зарплата</th>
+                  <th class="text-end">Аренда</th>
+                  <th class="text-end">Косметика</th>
+                  <th class="text-end">Материалы</th>
+                  <th class="text-end">Маркетинг</th>
+                  <th class="text-end">Банк</th>
+                  <th class="text-end">Налоги</th>
+                  <th class="text-end fw-bold">Расходы</th>
+                  <th class="text-end fw-bold">Прибыль</th>
+                </tr>
+              </thead>
+              <tbody id="pl-tbody">
+                <tr><td colspan="15" class="text-center text-muted py-4">Загрузка...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 3: Сотрудники -->
+    <div class="page-body d-none" id="screen-staff">
+      <div class="container-xl">
+
+        <!-- Табы -->
+        <div class="card mb-3">
+          <div class="card-header">
+            <ul class="nav nav-tabs card-header-tabs">
+              <li class="nav-item">
+                <a class="nav-link active" href="#" onclick="showStaffTab('efficiency', this)" style="padding:0.5rem 0.75rem;white-space:nowrap">📊 Эффективность</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="#" onclick="showStaffTab('schedule', this)" style="padding:0.5rem 0.75rem;white-space:nowrap">📅 Расписание</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="#" onclick="showStaffTab('payroll', this)" style="padding:0.5rem 0.75rem;white-space:nowrap">💰 Оплата труда</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="#" onclick="showStaffTab('checks', this)" style="padding:0.5rem 0.75rem;white-space:nowrap">✅ Статус</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Таб: Эффективность -->
+        <div id="staff-tab-efficiency">
+          <div class="row row-deck row-cards" id="staff-cards">
+          <div class="col-12 text-center text-muted py-4">Загрузка...</div>
+        </div>
+      </div>
+    </div>
+
+        </div><!-- /staff-tab-efficiency -->
+
+        <!-- Таб: Расписание -->
+        <div id="staff-tab-schedule" class="d-none">
+          <div class="card mb-3">
+            <div class="card-body d-flex align-items-center gap-3">
+              <button class="btn btn-outline-secondary btn-sm" onclick="changeScheduleMonth(-1)">← Пред.</button>
+              <h4 class="mb-0" id="schedule-month-title">—</h4>
+              <button class="btn btn-outline-secondary btn-sm" onclick="changeScheduleMonth(1)">След. →</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table table-bordered table-vcenter mb-0" id="schedule-table">
+                <thead class="table-dark">
+                  <tr>
+                    <th>Пн</th><th>Вт</th><th>Ср</th><th>Чт</th><th>Пт</th>
+                    <th class="bg-secondary">Сб</th><th class="bg-secondary">Вс</th>
+                  </tr>
+                </thead>
+                <tbody id="schedule-tbody">
+                  <tr><td colspan="7" class="text-center py-4 text-muted">Загрузка...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div><!-- /staff-tab-schedule -->
+
+        <!-- Таб: Оплата труда -->
+        <div id="staff-tab-payroll" class="d-none">
+          <div class="row row-deck row-cards">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-header">
+                  <h3 class="card-title">Ведомость оплаты труда</h3>
+                  <div class="card-options d-flex gap-2">
+                    <select class="form-select form-select-sm" id="payroll-filter-staff" onchange="applyPayrollFilter()">
+                      <option value="">Все сотрудники</option>
+                      <option>Александра</option>
+                      <option>Светлана</option>
+                      <option>Екатерина</option>
+                      <option>Анастасия</option>
+                      <option>Марина</option>
+                      <option>Мария</option>
+                    </select>
+                    <select class="form-select form-select-sm" id="payroll-filter-month" onchange="applyPayrollFilter()">
+                      <option value="">Все месяцы</option>
+                      <option value="2026-04">Апрель 2026</option>
+                      <option value="2026-03">Март 2026</option>
+                      <option value="2026-02">Февраль 2026</option>
+                      <option value="2026-01">Январь 2026</option>
+                      <option value="2025-12">Декабрь 2025</option>
+                      <option value="2025-11">Ноябрь 2025</option>
+                    </select>
+                    <select class="form-select form-select-sm" id="payroll-filter-period" onchange="applyPayrollFilter()">
+                      <option value="">Оба периода</option>
+                      <option value="1">1–14 число</option>
+                      <option value="2">15–31 число</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="card-body border-bottom py-2 px-3" id="payroll-summary" style="display:none">
+                  <div class="d-flex gap-4 flex-wrap">
+                    <div><span class="text-muted small">Начислено</span><div class="fw-bold" id="ps-accrued">—</div></div>
+                    <div><span class="text-muted small">Под запись</span><div class="fw-bold text-pink" id="ps-visit">—</div></div>
+                    <div><span class="text-muted small">Бонусы</span><div class="fw-bold" id="ps-bonus">—</div></div>
+                    <div><span class="text-muted small">Выплачено</span><div class="fw-bold text-red" id="ps-paid">—</div></div>
+                    <div><span class="text-muted small">Остаток</span><div class="fw-bold" id="ps-balance">—</div></div>
+                  </div>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-vcenter card-table">
+                    <thead>
+                      <tr>
+                        <th>Период</th>
+                        <th>Сотрудник</th>
+                        <th class="text-center">Смен</th>
+                        <th>Дни смен</th>
+                        <th>Дни выходов</th>
+                        <th class="text-end">Начислено</th>
+                        <th class="text-end">Аванс (нал.)</th>
+                        <th class="text-end">Бонус</th>
+                        <th class="text-end">Под запись</th>
+                        <th class="text-end">Компенсация</th>
+                        <th class="text-end text-red">Выплачено</th>
+                        <th class="text-end fw-bold">Остаток</th>
+                        <th>Примечания</th>
+                      </tr>
+                    </thead>
+                    <tbody id="payroll-tbody">
+                      <tr><td colspan="13" class="text-center text-muted py-3">Загрузка...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div><!-- /staff-tab-payroll -->
+
+        <div id="staff-tab-checks" class="d-none">
+          <div class="row row-deck row-cards">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-header">
+                  <h3 class="card-title">Статус проверок</h3>
+                  <div class="card-options">
+                    <select class="form-select form-select-sm" id="checks-filter-month" onchange="setTimeout(loadChecks, 50)">
+                      <option value="2026-04">Апрель 2026</option>
+                      <option value="2026-03">Март 2026</option>
+                      <option value="2026-02">Февраль 2026</option>
+                      <option value="2026-01">Январь 2026</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="card-body" id="checks-body">
+                  <p class="text-muted">Загрузка...</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div><!-- /staff-tab-checks -->
+
+      </div>
+    </div>
+
+        <!-- Screen 4: Обязательства -->
+    <div class="page-body d-none" id="screen-obligations">
+      <div class="container-xl">
+        <div class="row row-deck row-cards mb-3">
+          <div class="col-md-4">
+            <div class="card bg-red text-white">
+              <div class="card-body text-center">
+                <div class="text-white-75 mb-1">Фиксированные / месяц</div>
+                <div class="display-5 fw-bold" id="obl-fixed">—</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card bg-orange text-white">
+              <div class="card-body text-center">
+                <div class="text-white-75 mb-1">Переменные / месяц</div>
+                <div class="display-5 fw-bold" id="obl-variable">—</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card bg-yellow text-white">
+              <div class="card-body text-center">
+                <div class="text-white-75 mb-1">Единовременные долги</div>
+                <div class="display-5 fw-bold" id="obl-debts">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">График платежей на текущий месяц</h3>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-vcenter card-table">
+              <thead>
+                <tr>
+                  <th>День</th>
+                  <th>Описание</th>
+                  <th>Проект</th>
+                  <th>Категория</th>
+                  <th class="text-end">Сумма</th>
+                  <th>Статус</th>
+                </tr>
+              </thead>
+              <tbody id="obl-tbody">
+                <tr><td colspan="6" class="text-center text-muted py-4">Загрузка...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal modal-blur fade" id="detail-modal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modal-title">Детализация</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-0">
+        <div class="d-flex gap-3 p-3 border-bottom">
+          <div>
+            <div class="text-muted small">Период</div>
+            <div class="fw-bold" id="modal-period">—</div>
+          </div>
+          <div>
+            <div class="text-muted small">Транзакций</div>
+            <div class="fw-bold" id="modal-count">—</div>
+          </div>
+          <div class="ms-auto">
+            <div class="text-muted small">Итого</div>
+            <div class="fw-bold text-green h3 mb-0" id="modal-total">—</div>
+          </div>
+        </div>
+        <table class="table table-vcenter table-striped mb-0">
+          <thead>
+            <tr>
+              <th>Дата и время</th>
+              <th>Клиент</th>
+              <th>Тип</th>
+              <th>Способ оплаты</th>
+              <th class="text-end">Сумма</th>
+            </tr>
+          </thead>
+          <tbody id="modal-tbody"></tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@latest/dist/js/tabler.min.js"></script>
+<script>
+const API = '';
+const TODAY = new Date();
+const YEAR = TODAY.getFullYear();
+const MONTH = TODAY.getMonth() + 1;
+
+async function fetchData(url) {
+  try {
+    const res = await fetch(API + url);
+    return await res.json();
+  } catch(e) {
+    console.error('Fetch error:', url, e);
+    return null;
+  }
+}
+
+function formatMoney(n) {
+  if (!n && n !== 0) return '—';
+  return new Intl.NumberFormat('ru-RU', {
+    style: 'currency', currency: 'RUB', maximumFractionDigits: 0
+  }).format(n);
+}
+
+function formatK(n) {
+  if (!n && n !== 0) return '—';
+  if (Math.abs(n) >= 1000000) return (n/1000000).toFixed(1) + 'М ₽';
+  if (Math.abs(n) >= 1000) return Math.round(n/1000) + 'К ₽';
+  return n + ' ₽';
+}
+
+// Navigation
+function showScreen(name) {
+  ['pulse','pl','staff','obligations'].forEach(s => {
+    document.getElementById('screen-' + s).classList.add('d-none');
+  });
+  document.getElementById('screen-' + name).classList.remove('d-none');
+  
+  const titles = {
+    pulse: 'Пульс системы',
+    pl: 'P&L отчёт',
+    staff: 'Сотрудники',
+    obligations: 'Обязательства'
+  };
+  document.getElementById('page-title').textContent = titles[name];
+  
+  if (name === 'pl' && !window.plLoaded) { loadPL(); window.plLoaded = true; }
+  if (name === 'staff' && !window.staffLoaded) { loadStaff(); window.staffLoaded = true; }
+  if (name === 'obligations' && !window.oblLoaded) { loadObligations(); window.oblLoaded = true; }
+}
+
+// ============ KPI КАРТОЧКИ ============
+
+async function loadKPI() {
+  const [summary, revenue, clients] = await Promise.all([
+    fetchData('/analytics/summary'),
+    fetchData('/analytics/revenue?weeks=12'),
+    fetchData('/analytics/clients?weeks=12')
+  ]);
+
+  if (summary) {
+    document.getElementById('kpi-revenue').textContent = formatK(summary.current_month_revenue);
+    document.getElementById('kpi-prev-revenue').textContent = formatK(summary.prev_month_revenue);
+    document.getElementById('kpi-visits').textContent = summary.current_month_visits;
+    document.getElementById('kpi-prev-visits').textContent = summary.prev_month_visits;
+    const vGrowth = summary.visits_growth;
+    const vClass = vGrowth >= 0 ? 'text-green' : 'text-red';
+    document.getElementById('kpi-visits-trend').innerHTML = 
+      `<span class="${vClass} small fw-bold">${vGrowth>=0?'+':''}${vGrowth}%</span>`;
+
+    document.getElementById('kpi-clients').textContent = summary.unique_clients;
+    document.getElementById('kpi-prev-clients').textContent = summary.prev_unique_clients;
+    const cGrowth = summary.clients_growth;
+    const cClass = cGrowth >= 0 ? 'text-green' : 'text-red';
+    document.getElementById('kpi-clients-trend').innerHTML = 
+      `<span class="${cClass} small fw-bold">${cGrowth>=0?'+':''}${cGrowth}%</span>`;
+    
+    const growth = summary.revenue_growth;
+    const growthClass = growth >= 0 ? 'text-green' : 'text-red';
+    const growthSign = growth >= 0 ? '+' : '';
+    document.getElementById('kpi-revenue-trend').innerHTML = 
+      `<span class="${growthClass} small fw-bold">${growthSign}${growth}%</span>`;
+  }
+
+  if (revenue && revenue.labels) {
+    new ApexCharts(document.getElementById('revenue-chart'), {
+      series: [{ name: 'Выручка', data: revenue.revenue }],
+      chart: { type: 'area', height: 160, toolbar: { show: false }, sparkline: { enabled: false } },
+      labels: revenue.labels.map(d => new Date(d).toLocaleDateString('ru-RU', {day:'numeric',month:'short'})),
+      colors: ['#206bc4'],
+      fill: { opacity: 0.1 },
+      stroke: { width: 2 },
+      xaxis: { labels: { rotate: -45, style: { fontSize: '10px' } } },
+      yaxis: { labels: { formatter: v => formatK(v) } },
+      tooltip: { y: { formatter: v => formatK(v) } }
+    }).render();
+
+    // Таблица недель — кликабельная
+    const weeksBody = document.getElementById('revenue-weeks-body');
+    const weeks = [...revenue.labels].reverse();
+    const amounts = [...revenue.revenue].reverse();
+    
+    weeksBody.innerHTML = weeks.map((label, i) => {
+      const amount = amounts[i];
+      const prevAmount = amounts[i+1];
+      const diff = prevAmount ? amount - prevAmount : null;
+      const diffPct = prevAmount ? Math.round(diff/prevAmount*100) : null;
+      const diffClass = diff >= 0 ? 'text-green' : 'text-red';
+      const diffStr = diff !== null 
+        ? `<span class="${diffClass}">${diff>=0?'+':''}${diffPct}%</span>`
+        : '<span class="text-muted">—</span>';
+      
+      const labelDate = new Date(label);
+      const nextDate = new Date(labelDate);
+      nextDate.setDate(nextDate.getDate() + 7);
+      const fmt = d => d.toISOString().split('T')[0];
+      const weekLabel = labelDate.toLocaleDateString('ru-RU', {day:'numeric', month:'long'});
+      const weekEnd = new Date(nextDate);
+      weekEnd.setDate(weekEnd.getDate() - 1);
+      const weekEndLabel = weekEnd.toLocaleDateString('ru-RU', {day:'numeric', month:'short'});
+      
+      return `<tr style="cursor:pointer" onclick="showDetail('${fmt(labelDate)}','${fmt(nextDate)}','Неделя ${weekLabel} — ${weekEndLabel}')">
+        <td><span class="fw-bold">${weekLabel}</span> <span class="text-muted small">— ${weekEndLabel}</span></td>
+        <td class="text-end fw-bold">${formatMoney(amount)}</td>
+        <td class="text-end">${diffStr}</td>
+        <td class="text-center"><span class="badge bg-blue-lt">→ детали</span></td>
+      </tr>`;
+    }).join('');
+  }
+
+  if (clients && clients.labels) {
+    new ApexCharts(document.getElementById('clients-chart'), {
+      series: [
+        { name: 'Новые', data: clients.new },
+        { name: 'Повторные', data: clients.returning }
+      ],
+      chart: { type: 'bar', height: 200, toolbar: { show: false }, stacked: true },
+      labels: clients.labels.map(d => new Date(d).toLocaleDateString('ru-RU', {day:'numeric',month:'short'})),
+      colors: ['#206bc4', '#2fb344'],
+      xaxis: { labels: { rotate: -45, style: { fontSize: '10px' } } },
+      legend: { position: 'top' }
+    }).render();
+  }
+}
+
+// ============ ПУЛЬС СИСТЕМЫ ============
+
+async function loadPulse() {
+  await loadKPI();
+  const [summary, churn, obligations] = await Promise.all([
+    fetchData('/analytics/summary'),
+    fetchData('/analytics/churn?days=45'),
+    fetchData(`/analytics/obligations/${YEAR}/${MONTH}`)
+  ]);
+
+  // Summary KPI
+  if (summary) {
+    document.getElementById('rev-month').textContent = formatK(summary.current_month_revenue);
+  }
+
+  // Obligations
+  if (obligations) {
+    const salon = obligations.summary.salon;
+    const revenue = summary?.current_month_revenue || 0;
+    document.getElementById('obl-month').textContent = formatK(salon);
+    
+    const pct = Math.min(revenue / salon * 100, 100);
+    document.getElementById('obl-bar').style.width = pct + '%';
+    document.getElementById('obl-bar').className = 
+      'obligation-fill ' + (pct >= 100 ? 'bg-green' : pct >= 70 ? 'bg-yellow' : 'bg-red');
+    
+    const diff = revenue - salon;
+    document.getElementById('obl-comment').textContent = 
+      diff >= 0 
+        ? `✅ Доход покрывает обязательства. Остаток: ${formatK(diff)}`
+        : `⚠️ Не хватает: ${formatK(Math.abs(diff))}`;
+
+    // Ближайшие платежи
+    const today = TODAY.getDate();
+    const upcoming = obligations.obligations
+      .filter(o => o.day_of_month && o.day_of_month >= today && o.type !== 'debt')
+      .sort((a,b) => a.day_of_month - b.day_of_month)
+      .slice(0, 4);
+    
+    document.getElementById('obl-list').innerHTML = upcoming.map(o => `
+      <div class="d-flex align-items-center mb-2">
+        <span class="badge bg-blue-lt me-2">${o.day_of_month}</span>
+        <span class="flex-grow-1 text-truncate small">${o.description}</span>
+        <span class="ms-2 fw-bold small">${formatK(o.amount)}</span>
+      </div>
+    `).join('');
+  }
+
+  // CM/LH — считаем из записей
+  await loadNorthStar();
+  
+  // Heatmap
+  await loadHeatmap();
+
+  // Utilization
+  await loadUtilization();
+}
+
+async function loadNorthStar() {
+  const data = await fetchData('/analytics/cmph');
+  if (!data || data.error) return;
+
+  document.getElementById('ns-cmph').textContent = formatMoney(data.cmph);
+  const trend = data.cmph > 3000 ? '🟢 Отлично' : data.cmph > 1500 ? '🟡 Норма' : '🔴 Низко';
+  document.getElementById('ns-trend').textContent = trend;
+  document.getElementById('ns-detail').textContent = data.labor_hours + 'ч · CM ' + formatK(data.cm);
+}
+
+async function loadHeatmap() {
+  const container = document.getElementById('heatmap-container');
+  
+  // Генерируем последние 4 недели
+  const days = [];
+  for (let i = 27; i >= 0; i--) {
+    const d = new Date(TODAY);
+    d.setDate(d.getDate() - i);
+    days.push(d);
+  }
+
+  // Группируем по неделям
+  const weeks = [];
+  for (let w = 0; w < 4; w++) {
+    weeks.push(days.slice(w*7, w*7+7));
+  }
+
+  const dayNames = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+  
+  container.innerHTML = weeks.map((week, wi) => `
+    <div>
+      <div class="text-muted small mb-1 text-center">Нед ${wi+1}</div>
+      <div class="d-flex gap-1 flex-column">
+        ${week.map((day, di) => {
+          const util = Math.random() * 100; // TODO: заменить реальными данными
+          const heatClass = util === 0 ? 'heat-0' : 
+                           util < 25 ? 'heat-1' :
+                           util < 50 ? 'heat-2' :
+                           util < 75 ? 'heat-3' :
+                           util < 90 ? 'heat-4' : 'heat-5';
+          return `<div class="heatmap-cell ${heatClass}" title="${day.toLocaleDateString('ru')} — ${Math.round(util)}%">
+            ${dayNames[di]}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function loadUtilization() {
+  // Заглушка — заменим на реальные данные после добавления расписания
+  document.getElementById('util-rate').textContent = '68%';
+  
+  const options = {
+    series: [68],
+    chart: { type: 'radialBar', height: 80, width: 80, sparkline: { enabled: true } },
+    plotOptions: { radialBar: { 
+      hollow: { size: '50%' },
+      dataLabels: { show: false }
+    }},
+    colors: ['#206bc4'],
+  };
+  new ApexCharts(document.getElementById('util-chart'), options).render();
+}
+
+// ============ P&L ============
+
+async function loadPL() {
+  const data = await fetchData('/analytics/pl');
+  if (!data || !data.months) return;
+
+  const tbody = document.getElementById('pl-tbody');
+  tbody.innerHTML = [...data.months]
+    .filter(m => m.total_revenue > 0 || m.total_expenses > 0)
+    .reverse()
+    .map(m => {
+      const profitClass = m.profit >= 0 ? 'text-green fw-bold' : 'text-red fw-bold';
+      return `
+      <tr>
+        <td><span class="fw-bold">${m.month}</span></td>
+        <td class="text-end">${formatK(m.revenue_services)}</td>
+        <td class="text-end">${formatK(m.revenue_certificates)}</td>
+        <td class="text-end">${formatK(m.revenue_abonements)}</td>
+        <td class="text-end">${formatK(m.revenue_fitmost)}</td>
+        <td class="text-end fw-bold">${formatK(m.total_revenue)}</td>
+        <td class="text-end text-red">${formatK(m.salary)}</td>
+        <td class="text-end text-red">${formatK(m.rent)}</td>
+        <td class="text-end text-red">${formatK(m.cosmetics)}</td>
+        <td class="text-end text-red">${formatK(m.materials)}</td>
+        <td class="text-end text-red">${formatK(m.marketing)}</td>
+        <td class="text-end text-red">${formatK(m.bank_fees)}</td>
+        <td class="text-end text-red">${formatK(m.taxes)}</td>
+        <td class="text-end fw-bold text-red">${formatK(m.total_expenses)}</td>
+        <td class="text-end ${profitClass}">${formatK(m.profit)}</td>
+      </tr>`;
+    }).join('');
+}
+
+// ============ СОТРУДНИКИ ============
+
+async function loadStaff() {
+  const daily = await fetchData('/analytics/staff/daily?days=30');
+  if (!daily || !daily.days) return;
+
+  const byStaff = {};
+  daily.days.forEach(d => {
+    if (!byStaff[d.staff]) byStaff[d.staff] = { shifts: 0, revenue: 0, profitable: 0, unprofitable: 0 };
+    byStaff[d.staff].shifts++;
+    byStaff[d.staff].revenue += d.revenue;
+    if (d.is_profitable) byStaff[d.staff].profitable++;
+    else byStaff[d.staff].unprofitable++;
+  });
+
+  const staffSummary = Object.entries(byStaff).map(([name, s]) => ({
+    name,
+    shifts: s.shifts,
+    revenue: s.revenue,
+    avg_revenue: Math.round(s.revenue / s.shifts),
+    coefficient: Math.round(s.revenue / s.shifts / 5000 * 10) / 10,
+    profitable: s.profitable,
+    unprofitable: s.unprofitable
+  })).sort((a,b) => b.revenue - a.revenue);
+
+  // Итоговые метрики
+  const totalShifts = daily.days.length;
+  const profitableShifts = daily.days.filter(d => d.is_profitable).length;
+  const totalRevenue = daily.days.reduce((s, d) => s + d.revenue, 0);
+  const avgRevenue = Math.round(totalRevenue / totalShifts);
+  const avgCoef = Math.round(totalRevenue / totalShifts / 5000 * 10) / 10;
+  const salaryPct = Math.round(5000 / avgRevenue * 100);
+  const profitablePct = Math.round(profitableShifts / totalShifts * 100);
+
+  document.getElementById('staff-cards').innerHTML = `
+    <div class="col-12">
+      <div class="row row-deck row-cards mb-3">
+        <div class="col-md-3">
+          <div class="card">
+            <div class="card-body text-center">
+              <div class="text-muted mb-1">Средний коэффициент</div>
+              <div class="display-6 fw-bold ${avgCoef >= 4 ? 'text-green' : avgCoef >= 2 ? 'text-blue' : 'text-red'}">${avgCoef}x</div>
+              <div class="text-muted small">норма ≥ 2x</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card">
+            <div class="card-body text-center">
+              <div class="text-muted mb-1">ЗП от выручки</div>
+              <div class="display-6 fw-bold ${salaryPct <= 35 ? 'text-green' : salaryPct <= 50 ? 'text-yellow' : 'text-red'}">${salaryPct}%</div>
+              <div class="text-muted small">норма 25-35%</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card">
+            <div class="card-body text-center">
+              <div class="text-muted mb-1">Прибыльных смен</div>
+              <div class="display-6 fw-bold ${profitablePct >= 70 ? 'text-green' : profitablePct >= 50 ? 'text-yellow' : 'text-red'}">${profitablePct}%</div>
+              <div class="text-muted small">${profitableShifts} из ${totalShifts}</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card">
+            <div class="card-body text-center">
+              <div class="text-muted mb-1">Ср. выручка/смена</div>
+              <div class="display-6 fw-bold">${formatK(avgRevenue)}</div>
+              <div class="text-muted small">при ЗП 5 000 ₽</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12">
+      <div class="card mb-3">
+        <div class="card-header">
+          <h3 class="card-title">Эффективность мастеров — последние 30 дней</h3>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-vcenter card-table">
+            <thead>
+              <tr>
+                <th>Мастер</th>
+                <th class="text-center">Смен</th>
+                <th class="text-end">Выручка</th>
+                <th class="text-end">Ср./смена</th>
+                <th class="text-center">Коэфф.</th>
+                <th class="text-center">✅ Прибыльных</th>
+                <th class="text-center">❌ Убыточных</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${staffSummary.map(s => `
+              <tr>
+                <td class="fw-bold">${s.name}</td>
+                <td class="text-center">${s.shifts}</td>
+                <td class="text-end">${formatMoney(s.revenue)}</td>
+                <td class="text-end">${formatMoney(s.avg_revenue)}</td>
+                <td class="text-center">
+                  <span class="badge ${s.coefficient >= 4 ? 'bg-green' : s.coefficient >= 2 ? 'bg-yellow' : 'bg-red'}">${s.coefficient}x</span>
+                </td>
+                <td class="text-center text-green fw-bold">${s.profitable}</td>
+                <td class="text-center text-red fw-bold">${s.unprofitable}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Детализация по дням</h3>
+          <div class="card-options">
+            <span class="badge bg-green-lt">≥2x прибыльно</span>
+            <span class="badge bg-red-lt ms-1">&lt;2x убыточно</span>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-vcenter table-sm card-table">
+            <thead>
+              <tr>
+                <th>День</th>
+                <th>Мастер</th>
+                <th class="text-center">Записей</th>
+                <th class="text-center">Часов</th>
+                <th class="text-end">Выручка</th>
+                <th class="text-end text-purple">+ Або.</th>
+                <th class="text-end fw-bold">Итого</th>
+                <th class="text-end">Смена</th>
+                <th class="text-center">Коэфф.</th>
+                <th class="text-end">% ЗП</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${daily.days.map(d => {
+                const rowClass = d.revenue === 0 && d.abonement_revenue === 0 ? 'table-secondary' : !d.is_profitable ? 'table-danger' : '';
+                const coefClass = d.coefficient >= 4 ? 'text-green fw-bold' : d.coefficient >= 2 ? 'text-blue' : 'text-red fw-bold';
+                return `<tr class="${rowClass}">
+                  <td>${new Date(d.day).toLocaleDateString('ru-RU', {day:'numeric', month:'short', weekday:'short'})}</td>
+                  <td class="fw-bold">${d.staff}</td>
+                  <td class="text-center">
+                    ${d.records}
+                    ${d.zero_cost_records > 0 ? '<span class="badge bg-purple-lt ms-1">+' + d.zero_cost_records + ' або.</span>' : ''}
+                  </td>
+                  <td class="text-center text-muted">${d.duration_hours > 0 ? d.duration_hours + 'ч' : '—'}</td>
+                  <td class="text-end">${d.revenue > 0 ? formatMoney(d.revenue) : '<span class="text-muted">—</span>'}</td>
+                  <td class="text-end text-purple">${d.abonement_revenue > 0 ? '+' + formatK(d.abonement_revenue) : '—'}</td>
+                  <td class="text-end fw-bold">${formatMoney(d.total_revenue)}</td>
+                  <td class="text-end">${formatMoney(d.shift_pay)}</td>
+                  <td class="text-center"><span class="${coefClass}">${d.coefficient}x</span></td>
+                  <td class="text-end ${d.salary_pct > 50 ? 'text-red' : 'text-muted'}">${d.salary_pct > 0 ? d.salary_pct + '%' : '—'}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ============ STAFF TABS ============
+
+let scheduleYear = TODAY.getFullYear();
+let scheduleMonth = TODAY.getMonth() + 1;
+
+const MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь',
+                   'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+
+const STAFF_COLORS = {
+  'Александра': 'bg-blue text-white',
+  'Светлана': 'bg-green text-white',
+  'Екатерина': 'bg-purple text-white',
+  'Анастасия': 'bg-orange text-white',
+  'Марина': 'bg-pink text-white',
+  'Мария': 'bg-yellow',
+};
+
+function changeScheduleMonth(delta) {
+  scheduleMonth += delta;
+  if (scheduleMonth > 12) { scheduleMonth = 1; scheduleYear++; }
+  if (scheduleMonth < 1) { scheduleMonth = 12; scheduleYear--; }
+  loadSchedule();
+}
+
+async function loadSchedule() {
+  document.getElementById('schedule-month-title').textContent =
+    MONTHS_RU[scheduleMonth-1] + ' ' + scheduleYear;
+
+  const [data, coupleData, visitData, payrollData] = await Promise.all([
+    fetchData(`/analytics/shifts/${scheduleYear}/${scheduleMonth}`),
+    fetchData(`/analytics/couple-programs/${scheduleYear}/${scheduleMonth}`),
+    fetchData(`/analytics/visit-records/${scheduleYear}/${scheduleMonth}`),
+    fetchData(`/analytics/payroll-schedule/${scheduleYear}/${scheduleMonth}`)
+  ]);
+  if (!data || !data.shifts) return;
+  const coupleDays = coupleData?.couple_days || {};
+  const visitDays = visitData?.visit_days || {};
+  const payrollShifts = payrollData?.shifts_from_payroll || {};
+  const payrollVisits = payrollData?.visits_from_payroll || {};
+
+  // Группируем по дате
+  const byDay = {};
+  data.shifts.forEach(s => {
+    const day = parseInt(s.date.split('-')[2]);
+    if (!byDay[day]) byDay[day] = [];
+    byDay[day].push(s);
+  });
+
+  // Строим календарь
+  const firstDay = new Date(scheduleYear, scheduleMonth-1, 1);
+  let startDow = firstDay.getDay(); // 0=вс
+  startDow = startDow === 0 ? 6 : startDow - 1; // пн=0
+
+  const daysInMonth = new Date(scheduleYear, scheduleMonth, 0).getDate();
+  let rows = '';
+  let row = '<tr>';
+  let col = 0;
+
+  // Пустые ячейки до первого дня
+  for (let i = 0; i < startDow; i++) {
+    row += '<td class="text-muted p-1" style="min-width:100px;height:80px"></td>';
+    col++;
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const isWeekend = col >= 5;
+    const bgClass = isWeekend ? 'bg-light' : '';
+    const shifts = byDay[day] || [];
+    const shiftsHtml = shifts.map(s => {
+      return `<span class="badge bg-secondary text-white d-block mb-1">${s.staff_name}</span>`;
+    }).join('');
+    const couplePrograms = coupleDays[day] || [];
+    const realShifts = shifts.filter(s => !s.is_visit_only);
+    const shiftNames = realShifts.map(s => s.staff_name);
+    const isSingleShift = realShifts.length === 1;
+    const visitRecords = visitDays[day] || [];
+    const coupleHtml = (couplePrograms.length > 0 && isSingleShift && visitRecords.length === 0)
+      ? `<div class="mt-1 border-top pt-1">${couplePrograms.map(c => {
+          const payStr = c.visit_pay ? ' — ' + c.visit_pay.toLocaleString('ru-RU') + ' ₽' : '';
+          return `<span class="badge bg-pink-lt d-block mb-1" title="${c.service_title} (${c.duration_min} мин)">♥ ? неизвестен${payStr}</span>`;
+        }).join('')}</div>`
+      : '';
+    const conflictInShift = visitRecords.filter(v => shiftNames.includes(v.staff_name));
+    const conflictDup = visitRecords.length > 1
+      ? visitRecords.filter((v, i, arr) => arr.findIndex(x => x.staff_name === v.staff_name) !== i)
+      : [];
+    const visitHtml = visitRecords.length > 0
+      ? `<div class="mt-1 border-top pt-1">${visitRecords.map(v => {
+          const payStr = v.visit_pay ? ' — ' + v.visit_pay.toLocaleString('ru-RU') + ' ₽' : '';
+          const isConflict = shiftNames.includes(v.staff_name);
+          const badgeClass = isConflict ? 'bg-red text-white' : 'bg-pink-lt';
+          const conflictTitle = isConflict ? ' ⚠ также в смене!' : '';
+          return `<span class="badge ${badgeClass} d-block mb-1" title="${v.service_title}${conflictTitle}">♥ ${v.staff_name}${payStr}${isConflict ? ' ⚠' : ''}</span>`;
+        }).join('')}</div>`
+      : '';
+
+    const payrollShiftNames = payrollShifts[day] || [];
+    const payrollVisitList = payrollVisits[day] || [];
+
+    const conflicts = [];
+    shiftNames.forEach(name => {
+      if (payrollShiftNames.length > 0 && !payrollShiftNames.includes(name)) {
+        conflicts.push(`⚠ ${name} в shifts, но не в payroll`);
+      }
+    });
+    payrollShiftNames.forEach(name => {
+      if (shiftNames.length > 0 && !shiftNames.includes(name)) {
+        conflicts.push(`⚠ ${name} в payroll, но не в shifts`);
+      }
+    });
+    visitRecords.forEach(v => {
+      if (shiftNames.includes(v.staff_name)) {
+        conflicts.push(`⚠ ${v.staff_name} одновременно в смене и под запись`);
+      }
+    });
+    payrollVisitList.forEach(v => {
+      const inVisitRecords = visitRecords.some(r => r.staff_name === v.staff_name);
+      if (!inVisitRecords) {
+        conflicts.push(`⚠ ${v.staff_name} под запись в payroll, но нет в visit_records`);
+      }
+    });
+
+    const conflictHtml = conflicts.length > 0
+      ? `<div class="mt-1">${conflicts.map(c => `<span class="badge bg-red-lt d-block mb-1" style="font-size:10px;white-space:normal">${c}</span>`).join('')}</div>`
+      : '';
+
+    row += `<td class="${bgClass} p-1 align-top" style="min-width:100px;height:80px">
+      <div class="fw-bold small text-muted mb-1">${day}</div>
+      ${shiftsHtml || '<span class="text-muted small">—</span>'}
+      ${coupleHtml}
+      ${visitHtml}
+      ${conflictHtml}
+    </td>`;
+    col++;
+
+    if (col === 7) {
+      row += '</tr>';
+      rows += row;
+      row = '<tr>';
+      col = 0;
+    }
+  }
+
+  // Добить последнюю строку
+  while (col > 0 && col < 7) {
+    row += '<td class="text-muted p-1" style="min-width:100px;height:80px"></td>';
+    col++;
+  }
+  if (col === 7) rows += row + '</tr>';
+
+  document.getElementById('schedule-tbody').innerHTML = rows;
+}
+
+function showStaffTab(tab, el) {
+  document.getElementById('staff-tab-efficiency').classList.add('d-none');
+  document.getElementById('staff-tab-payroll').classList.add('d-none');
+  document.getElementById('staff-tab-schedule').classList.add('d-none');
+  document.getElementById('staff-tab-checks').classList.add('d-none');
+  document.getElementById('staff-tab-' + tab).classList.remove('d-none');
+  document.querySelectorAll('.nav-tabs .nav-link').forEach(a => a.classList.remove('active'));
+  el.classList.add('active');
+  if (tab === 'payroll') {
+    loadPayroll();
+  }
+  if (tab === 'schedule') {
+    loadSchedule();
+  }
+  if (tab === 'checks') {
+    document.getElementById('checks-body').innerHTML = '<p class="text-muted">Выберите месяц для проверки</p>';
+  }
+}
+
+async function applyPayrollFilter() {
+  await loadPayroll();
+}
+
+function validatePayrollNotes(p) {
+  const notes = p.notes || '';
+  const warnings = [];
+  const periodStart = new Date(p.period_start);
+
+  const dateRegex = /(\d{2})\.(\d{2})=\d+/g;
+  let m;
+  while ((m = dateRegex.exec(notes)) !== null) {
+    const day = parseInt(m[1]);
+    const month = parseInt(m[2]) - 1;
+    const year = periodStart.getFullYear();
+    const d = new Date(year, month, day);
+    if (d.getMonth() !== month) {
+      warnings.push('⚠ ' + m[1] + '.' + (month+1).toString().padStart(2,'0') + ' не существует');
+    }
+  }
+
+  const shiftMatch = notes.match(/Смены?:\s*([\d,\s]+)/);
+  if (shiftMatch) {
+    const days = shiftMatch[1].split(',').map(d => parseInt(d.trim())).filter(Boolean);
+    days.forEach(day => {
+      const d = new Date(periodStart.getFullYear(), periodStart.getMonth(), day);
+      if (d.getMonth() !== periodStart.getMonth()) {
+        warnings.push('⚠ смена ' + day + ' числа не существует');
+      }
+    });
+  }
+
+  if (warnings.length === 0) return '';
+  return '<div class="mt-1">' + warnings.map(w =>
+    '<span class="badge bg-red-lt d-block mb-1" style="white-space:normal">' + w + '</span>'
+  ).join('') + '</div>';
+}
+
+async function loadPayroll() {
+  const staff = document.getElementById('payroll-filter-staff')?.value || '';
+  const monthVal = document.getElementById('payroll-filter-month')?.value || '';
+  const period = document.getElementById('payroll-filter-period')?.value || '';
+  const data = await fetchData('/analytics/payroll?months=6');
+  if (!data || !data.payroll) return;
+  let filtered = data.payroll;
+  if (staff) filtered = filtered.filter(p => p.staff_name === staff);
+  if (monthVal) filtered = filtered.filter(p => p.period_start.startsWith(monthVal));
+  if (period === '1') filtered = filtered.filter(p => parseInt(p.period_start.split('-')[2]) <= 14);
+  if (period === '2') filtered = filtered.filter(p => parseInt(p.period_start.split('-')[2]) >= 15);
+  const labels = [];
+  if (staff) labels.push(staff);
+  if (monthVal) labels.push(monthVal);
+  if (period === '1') labels.push('1–14');
+  if (period === '2') labels.push('15–31');
+  const lbl = document.getElementById('payroll-filter-label'); if(lbl) lbl.textContent = labels.join(' · ') || 'Все записи';
+  const summary = document.getElementById('payroll-summary');
+  if (filtered.length > 0) {
+    const totalAccrued = filtered.reduce((s, p) => s + (p.total_accrued || 0), 0);
+    const totalVisit = filtered.reduce((s, p) => s + (p.visit_pay || 0), 0);
+    const totalBonus = filtered.reduce((s, p) => s + (p.bonus_loyalty || 0), 0);
+    const totalPaid = filtered.reduce((s, p) => s + (p.total_paid || 0), 0);
+    const totalBalance = filtered.reduce((s, p) => s + (p.balance || 0), 0);
+    document.getElementById('ps-accrued').textContent = formatMoney(totalAccrued);
+    document.getElementById('ps-visit').textContent = totalVisit > 0 ? formatMoney(totalVisit) : '—';
+    document.getElementById('ps-bonus').textContent = totalBonus > 0 ? formatMoney(totalBonus) : '—';
+    document.getElementById('ps-paid').textContent = formatMoney(totalPaid);
+    const balEl = document.getElementById('ps-balance');
+    balEl.textContent = formatMoney(totalBalance);
+    balEl.className = 'fw-bold ' + (totalBalance > 0 ? 'text-red' : totalBalance < 0 ? 'text-orange' : 'text-green');
+    summary.style.display = '';
+  } else {
+    summary.style.display = 'none';
+  }
+
+  const totalBalance = filtered.reduce((s, p) => s + p.balance, 0);
+
+  document.getElementById('payroll-tbody').innerHTML = filtered.map(p => {
+    const periodStart = new Date(p.period_start).toLocaleDateString('ru-RU', {day:'numeric', month:'short'});
+    const periodEnd = new Date(p.period_end).toLocaleDateString('ru-RU', {day:'numeric', month:'short'});
+    const balanceClass = p.balance > 0 ? 'text-red fw-bold' : p.balance < 0 ? 'text-orange fw-bold' : 'text-green';
+    return `<tr>
+      <td class="text-muted small">${periodStart} — ${periodEnd}</td>
+      <td class="fw-bold">${p.staff_name}</td>
+      <td class="text-center">${p.shifts}</td>
+      <td class="text-muted small">${(() => {
+        const m = (p.notes||'').match(/Смены?:\s*([\d,\s]+)/);
+        return m ? m[1].trim() : '—';
+      })()}</td>
+      <td class="text-muted small">${(() => {
+        const notes = p.notes || '';
+        const days = [];
+        const visitBlock = notes.match(/Выходы?[^:]*:(.*?)(?:\.\s+[А-ЯЁ]|$)/);
+        if (visitBlock) {
+          const re = /(\d{2})\.(\d{2})=\d+/g;
+          let m;
+          while ((m = re.exec(visitBlock[1])) !== null) {
+            days.push(parseInt(m[1]) + '.' + m[2]);
+          }
+        }
+        return days.length > 0 ? days.join(', ') : '—';
+      })()}</td>
+      <td class="text-end">${formatMoney(p.total_accrued)}</td>
+      <td class="text-end text-muted">${p.advance_cash > 0 ? formatMoney(p.advance_cash) : '—'}</td>
+      <td class="text-end text-muted">${p.bonus_loyalty > 0 ? formatMoney(p.bonus_loyalty) : '—'}</td>
+      <td class="text-end text-muted">${p.visit_pay > 0 ? formatMoney(p.visit_pay) : '—'}</td>
+      <td class="text-end text-muted">${p.expenses_reimbursement > 0 ? '+' + formatMoney(p.expenses_reimbursement) : '—'}</td>
+      <td class="text-end text-red">${formatMoney(p.total_paid)}</td>
+      <td class="text-end ${balanceClass}">${formatMoney(p.balance)}</td>
+      <td class="text-muted small">${p.notes || ''} ${validatePayrollNotes(p)}</td>
+    </tr>`;
+  }).join('') + `<tr class="table-light fw-bold">
+    <td colspan="10" class="text-end">Итого к выплате:</td>
+    <td class="text-end text-red">${formatMoney(totalBalance)}</td>
+    <td></td>
+  </tr>`;
+}
+
+// ============ СТАТУС ПРОВЕРОК ============
+async function loadChecks() {
+  const monthVal = document.getElementById('checks-filter-month')?.value || '';
+  if (!monthVal) {
+    document.getElementById('checks-body').innerHTML = '<p class="text-muted">Выберите месяц для проверки</p>';
+    return;
+  }
+  document.getElementById('checks-body').innerHTML = '<p class="text-muted">Загрузка...</p>';
+  try {
+  const [year, month] = monthVal.split('-').map(Number);
+  const [shiftsData, visitData, payrollData, coupleData, payrollFull] = await Promise.all([
+    fetchData(`/analytics/shifts/${year}/${month}`),
+    fetchData(`/analytics/visit-records/${year}/${month}`),
+    fetchData(`/analytics/payroll-schedule/${year}/${month}`),
+    fetchData(`/analytics/couple-programs/${year}/${month}`),
+    fetchData(`/analytics/payroll?months=12`)
+  ]);
+
+  const shifts = shiftsData?.shifts || [];
+  const visitDays = visitData?.visit_days || {};
+  const payrollShifts = payrollData?.shifts_from_payroll || {};
+  const payrollVisits = payrollData?.visits_from_payroll || {};
+  const coupleDays = coupleData?.couple_days || {};
+
+  const byDay = {};
+  shifts.forEach(s => {
+    const day = parseInt(s.date.split('-')[2]);
+    if (!byDay[day]) byDay[day] = [];
+    byDay[day].push(s.staff_name);
+  });
+
+  const errors = [];
+  const warnings = [];
+  const ok = [];
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+  for (let day = 1; day <= daysInMonth; day++) {
+    const shiftNames = byDay[day] || [];
+    const payrollShiftNames = payrollShifts[day] || [];
+    const visitRecords = visitDays[day] || [];
+    const payrollVisitList = payrollVisits[day] || [];
+    const couplePrograms = coupleDays[day] || [];
+
+    shiftNames.forEach(name => {
+      if (payrollShiftNames.length > 0 && !payrollShiftNames.includes(name)) {
+        errors.push(`${day}.${String(month).padStart(2,'0')} — ${name}: в расписании, но не в payroll`);
+      }
+    });
+    payrollShiftNames.forEach(name => {
+      if (shiftNames.length > 0 && !shiftNames.includes(name)) {
+        errors.push(`${day}.${String(month).padStart(2,'0')} — ${name}: в payroll, но не в расписании`);
+      }
+    });
+    visitRecords.forEach(v => {
+      if (shiftNames.includes(v.staff_name)) {
+        errors.push(`${day}.${String(month).padStart(2,'0')} — ${v.staff_name}: одновременно в смене и под запись`);
+      }
+    });
+    payrollVisitList.forEach(v => {
+      const inVisitRecords = visitRecords.some(r => r.staff_name === v.staff_name);
+      if (!inVisitRecords) {
+        warnings.push(`${day}.${String(month).padStart(2,'0')} — ${v.staff_name}: выход в payroll, но нет в visit_records`);
+      }
+    });
+    if (couplePrograms.length > 0 && shiftNames.length === 1 && visitRecords.length === 0 && payrollVisitList.length === 0) {
+      warnings.push(`${day}.${String(month).padStart(2,'0')} — парная программа, но мастер под запись не определён`);
+    }
+  }
+
+  const payrollRecords = (payrollFull?.payroll || []).filter(p => p.period_start.startsWith(monthVal));
+  payrollRecords.forEach(p => {
+    const notes = p.notes || '';
+
+    const shiftMatch = notes.match(/Смены?:\s*([\d,\s]+)/);
+    if (shiftMatch) {
+      const days = shiftMatch[1].split(',').map(d => parseInt(d.trim())).filter(Boolean);
+      if (days.length !== p.shifts) {
+        errors.push(`${p.staff_name} (${p.period_start.slice(0,7)}): смен ${p.shifts}, но в примечаниях ${days.length} дней (${days.join(',')})`);
+      }
+    }
+
+    const visitMatch = notes.match(/Выходы?[^:]*:(.*?)(?:\.\s+[А-ЯЁ]|$)/);
+    const visitInlineMatches = [...notes.matchAll(/Выход[^:\d]*(\d{2})\.(\d{2})=(\d+)/g)];
+    let entries = [];
+    if (visitMatch) {
+      entries = [...visitMatch[1].matchAll(/(\d{2})\.(\d{2})=(\d+)/g)];
+    }
+    if (visitInlineMatches.length > 0 && entries.length === 0) {
+      entries = visitInlineMatches.map(m => [m[0], m[1], m[2], m[3]]);
+    }
+    if (entries.length > 0) {
+      const payrollVisitSum = entries.reduce((s, m) => s + parseInt(m[3]), 0);
+
+      const payrollVisitCount = entries.length;
+
+      const periodStart = new Date(p.period_start);
+      const periodEnd = new Date(p.period_end);
+      const visitInPeriod = Object.entries(visitDays)
+        .filter(([day]) => {
+          const d = new Date(year, month-1, parseInt(day));
+          return d >= periodStart && d <= periodEnd;
+        })
+        .flatMap(([_, recs]) => recs.filter(r => r.staff_name === p.staff_name));
+
+      const visitRecordCount = visitInPeriod.length;
+      const visitRecordSum = visitInPeriod.reduce((s, r) => s + (r.visit_pay || 0), 0);
+
+      if (payrollVisitCount !== visitRecordCount && payrollVisitSum === visitRecordSum) {
+        warnings.push(`${p.staff_name} (${p.period_start.slice(0,7)}): записей в payroll ${payrollVisitCount}, в visit_records ${visitRecordCount} — но суммы совпадают (${payrollVisitSum}₽)`);
+      } else if (payrollVisitCount !== visitRecordCount && payrollVisitSum !== visitRecordSum) {
+        errors.push(`${p.staff_name} (${p.period_start.slice(0,7)}): записей в payroll ${payrollVisitCount}, в visit_records ${visitRecordCount}; сумма в payroll ${payrollVisitSum}₽, в visit_records ${visitRecordSum}₽`);
+      } else if (payrollVisitCount === visitRecordCount && payrollVisitSum !== visitRecordSum) {
+        errors.push(`${p.staff_name} (${p.period_start.slice(0,7)}): количество совпадает (${payrollVisitCount}), но сумма в payroll ${payrollVisitSum}₽, в visit_records ${visitRecordSum}₽`);
+      }
+    } else if (p.visit_pay > 0) {
+      warnings.push(`${p.staff_name} (${p.period_start.slice(0,7)}): visit_pay=${p.visit_pay}₽, но в примечаниях нет выходов`);
+    }
+  });
+
+  const now = new Date().toLocaleString('ru-RU');
+  const checksList = [
+    'Мастер в расписании (shifts) совпадает с payroll notes',
+    'Мастер в payroll notes совпадает с расписанием (shifts)',
+    'Мастер не числится одновременно в смене и под запись',
+    'Выход под запись из payroll есть в visit_records',
+    'Парные программы — мастер под запись определён',
+    'Количество смен в payroll совпадает с днями смен в примечаниях',
+    'Дни выходов в payroll совпадают с visit_records по количеству и сумме'
+  ];
+
+  const body = document.getElementById('checks-body');
+  let html_out = `<div class="text-muted small mb-3">Проверено: ${now}</div>`;
+  html_out += '<div class="mb-3"><strong>Выполненные проверки:</strong><ul class="mt-1 mb-0">';
+  html_out += checksList.map(c => `<li class="text-muted small">${c}</li>`).join('');
+  html_out += '</ul></div><hr>';
+
+  if (errors.length === 0 && warnings.length === 0) {
+    html_out += '<div class="text-center text-green py-2">✅ Ошибок не найдено</div>';
+    body.innerHTML = html_out;
+    return;
+  }
+
+  if (errors.length > 0) {
+    html_out += '<h4 class="text-red mb-2">Ошибки (' + errors.length + ')</h4>';
+    html_out += errors.map(e => `<div class="badge bg-red-lt d-block mb-2 text-start" style="white-space:normal;font-size:13px">⚠ ${e}</div>`).join('');
+  }
+  if (warnings.length > 0) {
+    html_out += '<h4 class="text-orange mb-2 mt-3">Предупреждения (' + warnings.length + ')</h4>';
+    html_out += warnings.map(w => `<div class="badge bg-yellow-lt d-block mb-2 text-start" style="white-space:normal;font-size:13px">⚡ ${w}</div>`).join('');
+  }
+  body.innerHTML = html_out;
+  } catch(e) {
+    document.getElementById('checks-body').innerHTML = '<div class="text-red">Ошибка: ' + e.message + '</div>';
+    console.error('loadChecks error:', e);
+  }
+}
+
+// ============ ОБЯЗАТЕЛЬСТВА ============
+
+async function loadObligations() {
+  const data = await fetchData(`/analytics/obligations/${YEAR}/${MONTH}`);
+  if (!data) return;
+
+  document.getElementById('obl-fixed').textContent = formatK(data.summary.fixed);
+  document.getElementById('obl-variable').textContent = formatK(data.summary.variable);
+  document.getElementById('obl-debts').textContent = formatK(data.summary.debt);
+
+  const today = TODAY.getDate();
+  
+  document.getElementById('obl-tbody').innerHTML = data.obligations
+    .sort((a,b) => (a.day_of_month || 99) - (b.day_of_month || 99))
+    .map(o => {
+      const isPast = o.day_of_month && o.day_of_month < today;
+      const isToday = o.day_of_month === today;
+      const statusBadge = o.type === 'debt' 
+        ? '<span class="badge bg-red-lt">Долг</span>'
+        : isPast 
+          ? '<span class="badge bg-green-lt">✓ Оплачен</span>'
+          : isToday
+            ? '<span class="badge bg-red">Сегодня!</span>'
+            : '<span class="badge bg-blue-lt">Ожидается</span>';
+      
+      const projectBadge = o.project === 'salon' 
+        ? '<span class="badge bg-blue-lt">Салон</span>'
+        : o.project === 'personal'
+          ? '<span class="badge bg-gray-lt">Личное</span>'
+          : `<span class="badge bg-purple-lt">${o.project}</span>`;
+
+      return `
+      <tr class="${isToday ? 'table-danger' : isPast ? 'table-success' : ''}">
+        <td>${o.day_of_month ? `<span class="fw-bold">${o.day_of_month}</span>` : '<span class="text-muted">разово</span>'}</td>
+        <td>${o.description}</td>
+        <td>${projectBadge}</td>
+        <td><span class="text-muted">${o.expense_category || ''}</span></td>
+        <td class="text-end fw-bold">${formatK(o.amount)}</td>
+        <td>${statusBadge}</td>
+      </tr>`;
+    }).join('');
+}
+
+// ============ DRILL DOWN MODAL ============
+
+async function showDetail(dateFrom, dateTo, title) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-period').textContent = `${dateFrom} — ${dateTo}`;
+  document.getElementById('modal-count').textContent = '...';
+  document.getElementById('modal-total').textContent = '...';
+  document.getElementById('modal-tbody').innerHTML = '<tr><td colspan="5" class="text-center py-3">Загрузка...</td></tr>';
+  
+  const modalEl = document.getElementById('detail-modal');
+  const modal = window.tabler ? new tabler.Modal(modalEl) : new bootstrap.Modal(modalEl);
+  modal.show();
+  
+  const data = await fetchData(`/analytics/revenue/detail?date_from=${dateFrom}&date_to=${dateTo}`);
+  if (!data || data.error) {
+    document.getElementById('modal-tbody').innerHTML = '<tr><td colspan="5" class="text-center text-red py-3">Ошибка загрузки</td></tr>';
+    return;
+  }
+  
+  document.getElementById('modal-count').textContent = data.count;
+  document.getElementById('modal-total').textContent = formatMoney(data.total);
+
+  // Группируем по типу
+  const byType = {};
+  data.transactions.forEach(t => {
+    byType[t.type_title] = (byType[t.type_title] || 0) + t.amount;
+  });
+
+  document.getElementById('modal-tbody').innerHTML = data.transactions.map(t => {
+    const dt = new Date(t.date);
+    const dateStr = dt.toLocaleDateString('ru-RU', {day:'numeric', month:'short'});
+    const timeStr = dt.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+    const typeBadge = t.type_title.includes('сертификат') 
+      ? 'bg-purple-lt' 
+      : t.type_title.includes('абонемент')
+        ? 'bg-orange-lt'
+        : 'bg-green-lt';
+    const accountIcon = t.account?.includes('Эквайринг') ? '💳' 
+      : t.account?.includes('Расчетный') ? '🏦' 
+      : '💵';
+    
+    return `<tr>
+      <td><span class="fw-bold">${dateStr}</span> <span class="text-muted">${timeStr}</span></td>
+      <td>${t.client_name || '<span class="text-muted">—</span>'}</td>
+      <td><span class="badge ${typeBadge}">${t.type_title}</span></td>
+      <td>${accountIcon} <span class="text-muted small">${t.account || '—'}</span></td>
+      <td class="text-end fw-bold">${formatMoney(t.amount)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ============ INIT ============
+
+async function init() {
+  document.getElementById('last-updated').textContent = 
+    'Обновлено: ' + TODAY.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'});
+  
+  await loadPulse();
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,8 +1,8 @@
 from fastapi import APIRouter, BackgroundTasks
-from app.yclients import get_records, get_clients, get_staff, get_services, get_transactions
+from app.yclients import get_records, get_clients, get_staff, get_services, get_service_categories, get_transactions
 from app.database import (
     save_records, save_clients, save_staff,
-    save_services, save_transactions, get_salon
+    save_services, save_service_categories, save_transactions, get_salon
 )
 from datetime import datetime, timedelta
 import traceback
@@ -161,6 +161,11 @@ async def sync_all(background_tasks: BackgroundTasks):
         if staff_data.get("success"):
             await save_staff(staff_data.get("data", []), COMPANY_ID)
             print(f"[SYNC] Сотрудники: {len(staff_data.get('data', []))}")
+
+        categories_data = await get_service_categories(COMPANY_ID, token)
+        if categories_data.get("success"):
+            await save_service_categories(categories_data.get("data", []), COMPANY_ID)
+            print(f"[SYNC] Категории: {len(categories_data.get('data', []))}")
 
         services_data = await get_services(COMPANY_ID, token)
         if services_data.get("success"):

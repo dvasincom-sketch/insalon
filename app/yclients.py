@@ -85,3 +85,59 @@ async def get_transactions(company_id: int, user_token: str, start_date: str, en
             }
         )
         return response.json()
+
+async def get_service_categories(company_id: int, user_token: str):
+    async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+        response = await client.get(
+            f"{BASE_URL}/service_categories/{company_id}",
+            headers=get_auth_headers(user_token)
+        )
+        return response.json()
+
+def create_client_sync(company_id: int, user_token: str, name: str, phone: str, email: str = ""):
+    with httpx.Client(timeout=30.0, verify=False) as client:
+        response = client.post(
+            f"{BASE_URL}/clients/{company_id}",
+            headers=get_auth_headers(user_token),
+            json={"name": name, "phone": phone, "email": email}
+        )
+        return response.json()
+
+def create_record_sync(company_id: int, user_token: str, data: dict):
+    with httpx.Client(timeout=30.0, verify=False) as client:
+        response = client.post(
+            f"{BASE_URL}/records/{company_id}",
+            headers=get_auth_headers(user_token),
+            json=data
+        )
+        return response.json()
+
+async def create_client(company_id: int, user_token: str, name: str, phone: str, email: str = ""):
+    import asyncio
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, create_client_sync, company_id, user_token, name, phone, email)
+
+async def create_record(company_id: int, user_token: str, data: dict):
+    import asyncio
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, create_record_sync, company_id, user_token, data)
+
+def find_client_by_phone_sync(company_id: int, user_token: str, phone: str):
+    with httpx.Client(timeout=30.0, verify=False) as client:
+        response = client.get(
+            f"{BASE_URL}/clients/{company_id}",
+            headers=get_auth_headers(user_token),
+            params={"fields": "id,name,phone", "count": 200}
+        )
+        data = response.json()
+        clients = data.get("data", [])
+        # Ищем по точному совпадению телефона
+        for c in clients:
+            if c.get("phone", "").replace(" ", "") == phone.replace(" ", ""):
+                return c
+        return None
+
+async def find_client_by_phone(company_id: int, user_token: str, phone: str):
+    import asyncio
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, find_client_by_phone_sync, company_id, user_token, phone)

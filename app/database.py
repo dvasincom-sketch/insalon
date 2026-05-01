@@ -116,19 +116,36 @@ async def save_staff(staff_list: list, company_id: int):
     result = supabase.table("staff").upsert(rows, on_conflict="id").execute()
     return result.data
 
+async def save_service_categories(categories_list: list, company_id: int):
+    if not categories_list:
+        return []
+    rows = []
+    for c in categories_list:
+        rows.append({
+            "id": c["id"],
+            "company_id": company_id,
+            "title": c.get("title", ""),
+            "weight": c.get("weight", 0)
+        })
+    result = supabase.table("service_categories").upsert(rows, on_conflict="id").execute()
+    return result.data
+
 async def save_services(services_list: list, company_id: int):
     if not services_list:
         return []
     rows = []
     for s in services_list:
+        staff = s.get("staff", [])
+        seance_length = staff[0].get("seance_length", 0) if staff and isinstance(staff[0], dict) else 0
         rows.append({
             "id": s["id"],
             "company_id": company_id,
             "title": s.get("title", ""),
-            "category": s.get("category", {}).get("title", "") if isinstance(s.get("category"), dict) else "",
+            "category_id": s.get("category_id"),
             "price_min": int(float(s.get("price_min", 0))),
             "price_max": int(float(s.get("price_max", 0))),
-            "duration": int(s.get("duration", 0))
+            "duration": int(s.get("duration") or 0),
+            "seance_length": seance_length
         })
     result = supabase.table("services").upsert(rows, on_conflict="id").execute()
     return result.data

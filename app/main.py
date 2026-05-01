@@ -51,6 +51,8 @@ if os.path.exists("static"):
     app.mount("/dashboard", StaticFiles(directory="static", html=True), name="static")
 if os.path.exists("static/v2"):
     app.mount("/v2", StaticFiles(directory="static/v2", html=True), name="static_v2")
+if os.path.exists("static/v3"):
+    app.mount("/v3", StaticFiles(directory="static/v3", html=True), name="static_v3")  # АКТУАЛЬНАЯ ВЕРСИЯ
 
 
 @app.get("/", tags=["Система"])

@@ -3,3 +3,9 @@ venv/
 __pycache__/
 *.pyc
 .DS_Store
+static/v3/_*
+static/v3/__*
+static/v3/___*
+static/v3/js/_*
+static/v3/js/__*
+app/routers/_*

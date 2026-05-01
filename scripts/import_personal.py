@@ -113,15 +113,19 @@ def import_csv(filepath: str):
         total = sum(r["amount"] for r in rows if r["expense_category"] == cat)
         print(f"  {cat}: {count} операций, сумма: {total:,.0f} ₽")
 
-    # Загружаем батчами
+    # Загружаем батчами через upsert (идемпотентно)
     batch_size = 100
     saved = 0
     for i in range(0, len(rows), batch_size):
         batch = rows[i:i+batch_size]
-        result = supabase.table("personal_transactions").insert(batch).execute()
+        result = supabase.table("personal_transactions").upsert(
+            batch,
+            on_conflict="company_id,datetime,amount,description"
+        ).execute()
         saved += len(result.data)
+        print(f"Обработано: {i+len(batch)}/{len(rows)}")
 
-    print(f"\nГотово! Загружено {saved} транзакций")
+    print(f"\nГотово! Upsert {saved} транзакций (дубли пропущены автоматически)")
 
 if __name__ == "__main__":
     filepath = sys.argv[1] if len(sys.argv) > 1 else "personal.csv"

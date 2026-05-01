@@ -530,6 +530,8 @@
                   </div>
                 </div>
                 <div class="card-body p-0">
+                  <div id="fot-period-tabs" class="px-3 pt-3 pb-0 d-flex gap-2 flex-wrap"></div>
+                  <div id="fot-prev-drafts" class="p-3 border-bottom" style="display:none"></div>
                   <div id="fot-loading" class="text-center py-5 text-muted">Загрузка данных...</div>
                   <div id="fot-content" style="display:none">
                     <!-- Строки мастеров -->
@@ -1726,21 +1728,49 @@ function getFotPeriod() {
   return { year, month, periodStart, periodEnd, label: `${half} ${MONTHS_RU[month-1]} ${year}` };
 }
 
-async function loadFotData() {
-  fotPeriod = getFotPeriod();
-  const { year, month, periodStart, periodEnd, label } = fotPeriod;
+async function loadFotData(overridePeriod) {
+  fotPeriod = overridePeriod || getFotPeriod();
+  const { year, month, day, periodStart, periodEnd, label } = fotPeriod;
 
   document.getElementById('fot-period-label').textContent = 'Период расчёта: ' + label;
   document.getElementById('fot-period-badge').textContent = label;
   document.getElementById('fot-loading').style.display = '';
   document.getElementById('fot-content').style.display = 'none';
 
-  const [shiftsData, visitsData, payrollData, periodData] = await Promise.all([
+  const [shiftsData, visitsData, payrollData, periodData, unclosedData] = await Promise.all([
     fetchData(`/analytics/shifts/${year}/${month}`),
     fetchData(`/analytics/visit-records/${year}/${month}`),
     fetchData(`/analytics/payroll?months=6`),
-    fetchData(`/payroll/period/${year}/${month}`)
+    fetchData(`/payroll/period/${year}/${month}`),
+    fetchData('/payroll/unclosed')
   ]);
+  // Рендер табов периодов
+  const tabsContainer = document.getElementById('fot-period-tabs');
+  if (tabsContainer) {
+    const unclosed = (unclosedData?.unclosed || []).filter(p => p.period_start !== periodStart);
+    let tabsHtml = '';
+    // Незакрытые периоды — оранжевые
+    unclosed.forEach(p => {
+      const MONTHS_RU = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+      const d = new Date(p.period_start + 'T00:00:00');
+      const endD = new Date(p.period_end + 'T00:00:00');
+      const label = d.getDate() + '–' + endD.getDate() + ' ' + MONTHS_RU[d.getMonth()];
+      const staffCount = p.staff.length;
+      tabsHtml += `<button class="btn btn-sm" style="background:#f76707;color:white;border:none;" 
+        onclick="openPrevPeriod('${p.period_start}')" 
+        title="${staffCount} сотр. не закрыто">
+        ⚠️ ${label} · ${staffCount} чел.
+      </button>`;
+    });
+    // Текущий период — голубой активный
+    const MONTHS_RU = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+    const curD = new Date(periodStart + 'T00:00:00');
+    const curE = new Date(periodEnd + 'T00:00:00');
+    const curLabel = curD.getDate() + '–' + curE.getDate() + ' ' + MONTHS_RU[curD.getMonth()];
+    tabsHtml += `<button class="btn btn-sm btn-primary" style="cursor:default;">${curLabel}</button>`;
+    tabsContainer.innerHTML = tabsHtml;
+  }
+
   // Мастера с paid записями за текущий период (только точный period_start)
   const paidStaff = {};
   (periodData?.records || []).forEach(p => {
@@ -1803,6 +1833,9 @@ async function loadFotData() {
   });
 
   renderFotRows();
+
+  // Проверяем незакрытые draft из предыдущего периода
+  const prevDrafts = {};
 
   // Подгружаем существующие draft-записи
   const draftData = await fetchData(`/payroll/draft/${year}/${month}`);
@@ -1903,6 +1936,13 @@ function renderFotRows() {
             <span class="badge bg-blue-lt">${d.shiftPay.toLocaleString('ru-RU')} ₽</span>
             ${d.visitPay > 0 ? `<span class="badge bg-pink-lt">выходы ${d.visitPay.toLocaleString('ru-RU')} ₽</span>` : ''}
           </div>
+          ${d.prevDraft ? `<div class="alert alert-warning py-2 px-3 mb-2" style="font-size:13px;">
+            ⚠️ Незакрытый период: <strong>${d.prevDraft.period_start} — ${d.prevDraft.period_end}</strong><br>
+            Начислено: ${(d.prevDraft.total_accrued||0).toLocaleString('ru-RU')} ₽ · 
+            Выплачено: ${(d.prevDraft.total_paid||0).toLocaleString('ru-RU')} ₽ · 
+            <strong>Остаток: ${(d.prevDraft.balance||0).toLocaleString('ru-RU')} ₽</strong>
+            <button class="btn btn-sm btn-warning ms-2" onclick="openPrevPeriod('${d.prevDraft.period_start}')">Закрыть</button>
+          </div>` : ''}
           <div class="text-muted small mb-2">Дни смен: ${d.shiftDays.join(', ') || '—'}</div>
           ${d.visitPay > 0 ? `<div class="text-muted small mb-2">${visitHtml}</div>` : ''}
           ${totalDebt < 0 ? `<div class="text-muted small mb-2">Переплата зачтена: <span class="text-green">${Math.abs(totalDebt).toLocaleString('ru-RU')} ₽</span></div>` : ''}
@@ -1953,6 +1993,50 @@ function renderFotRows() {
   });
 
   container.innerHTML = html || '<div class="text-center text-muted py-4">Нет данных за период</div>';
+
+  // Проверяем все ли закрыты
+  const allStaffList = Object.keys(fotData);
+  const allPaid = allStaffList.length > 0 && allStaffList.every(n => fotData[n].isPaid);
+  
+  const existingBanner = document.getElementById('fot-all-paid-banner');
+  if (existingBanner) existingBanner.remove();
+  
+  if (allPaid) {
+    const { label } = fotPeriod;
+    // Считаем следующий период
+    const ps = new Date(fotPeriod.periodStart + 'T00:00:00');
+    const pe = new Date(fotPeriod.periodEnd + 'T00:00:00');
+    const nextDate = new Date(pe);
+    nextDate.setDate(nextDate.getDate() + 1);
+    const nextYear = nextDate.getFullYear();
+    const nextMonth = nextDate.getMonth() + 1;
+    const nextDay = nextDate.getDate();
+    const isNextSecondHalf = nextDay >= 15;
+    const nextLastDay = new Date(nextYear, nextMonth, 0).getDate();
+    const nextEnd = isNextSecondHalf ? nextLastDay : 14;
+    const MONTHS_RU = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+    const nextLabel = `${nextDay}–${nextEnd} ${MONTHS_RU[nextMonth-1]} ${nextYear}`;
+    
+    const totalToPay = allStaffList.reduce((s, n) => {
+      const p = fotData[n].paidRecord;
+      return s + Math.max(0, (p?.total_accrued||0) - (p?.total_paid||0));
+    }, 0);
+
+    const banner = document.createElement('div');
+    banner.id = 'fot-all-paid-banner';
+    banner.className = 'p-4 text-center';
+    banner.innerHTML = `
+      <div style="background:linear-gradient(135deg,#2fb344,#1a7a2e);border-radius:12px;padding:24px;color:white;">
+        <div style="font-size:2rem;margin-bottom:8px;">🎉</div>
+        <div style="font-size:18px;font-weight:700;margin-bottom:4px;">Все выплаты за ${label} проведены!</div>
+        <div style="font-size:14px;opacity:0.9;margin-bottom:16px;">Итого выплачено: ${allStaffList.reduce((s,n)=>s+(fotData[n].paidRecord?.total_paid||0),0).toLocaleString('ru-RU')} ₽</div>
+        <button onclick="openNextPeriod(${nextYear},${nextMonth},${nextDay})" 
+          style="background:white;color:#2fb344;border:none;padding:10px 24px;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">
+          → Открыть ${nextLabel}
+        </button>
+      </div>`;
+    document.getElementById('fot-rows').appendChild(banner);
+  }
   Object.keys(fotData).forEach(name => recalcFot(name));
 }
 
@@ -2223,6 +2307,33 @@ ${advLines ? `<table>
 </table>
 
 <div class="footer">Сформировано: ${new Date().toLocaleDateString('ru-RU')} · Insalon</div>
+<!-- Модальное окно финальной выплаты -->
+<div id="payment-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:12px;padding:24px;width:420px;max-width:90%;">
+    <h3 id="pm-title" style="margin-bottom:16px;font-size:18px;"></h3>
+    <div style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:16px;font-size:14px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span class="text-muted">Начислено</span><strong id="pm-accrued"></strong></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span class="text-muted">Авансы выданы</span><strong id="pm-advances"></strong></div>
+      <div style="display:flex;justify-content:space-between;border-top:1px solid #dee2e6;padding-top:8px;margin-top:4px;"><span class="fw-bold">Остаток к выплате</span><strong id="pm-remaining" style="color:#2fb344;"></strong></div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:13px;font-weight:600;margin-bottom:4px;display:block;">Сумма выплаты ₽</label>
+      <input type="number" id="pm-amount" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:6px;font-size:15px;" placeholder="Введите сумму">
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="font-size:13px;font-weight:600;margin-bottom:4px;display:block;">Способ оплаты</label>
+      <select id="pm-method" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:6px;font-size:14px;">
+        <option value="transfer">💳 Безнал (перевод)</option>
+        <option value="cash">💵 Наличные</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="confirmPaymentModal()" style="flex:1;padding:10px;background:#2fb344;color:white;border:none;border-radius:6px;font-size:15px;font-weight:600;cursor:pointer;">✅ Подтвердить</button>
+      <button onclick="closePaymentModal()" style="padding:10px 16px;background:#f1f3f5;border:none;border-radius:6px;font-size:15px;cursor:pointer;">Отмена</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>`;
 
@@ -2231,6 +2342,27 @@ ${advLines ? `<table>
   win.document.close();
   win.focus();
   setTimeout(() => win.print(), 500);
+}
+
+function openPrevPeriod(periodStart) {
+  const d = new Date(periodStart + 'T00:00:00');
+  const year = d.getFullYear();
+  const month = d.getMonth() + 1;
+  const day = d.getDate();
+  openNextPeriod(year, month, day);
+}
+
+function openNextPeriod(year, month, day) {
+  const isSecondHalf = day >= 15;
+  const lastDay = new Date(year, month, 0).getDate();
+  const periodStart = year + '-' + String(month).padStart(2,'0') + '-' + String(day).padStart(2,'0');
+  const periodEnd = isSecondHalf
+    ? year + '-' + String(month).padStart(2,'0') + '-' + String(lastDay).padStart(2,'0')
+    : year + '-' + String(month).padStart(2,'0') + '-14';
+  const MONTHS_RU = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+  const half = isSecondHalf ? '15-' + lastDay : '1-14';
+  const nextPeriod = { year, month, day, periodStart, periodEnd, label: half + ' ' + MONTHS_RU[month-1] + ' ' + year };
+  loadFotData(nextPeriod);
 }
 
 async function cancelPaidStaff(name, id) {
@@ -2247,18 +2379,54 @@ async function cancelPaidStaff(name, id) {
   }
 }
 
+let _currentPaymentName = null;
+
 async function markPaidStaff(name) {
   const d = fotData[name];
   if (!d?.savedId) { alert('Сначала сохраните расчёт'); return; }
-  if (!confirm(`Подтвердить выплату ${name}?`)) return;
+  
+  const alreadyPaid = d.savedAdvance || 0;
+  const remaining = (d.savedAccrued || 0) - alreadyPaid;
+  
+  // Показываем модальное окно
+  _currentPaymentName = name;
+  document.getElementById('pm-title').textContent = name + ' — финальная выплата';
+  document.getElementById('pm-accrued').textContent = (d.savedAccrued||0).toLocaleString('ru-RU') + ' ₽';
+  document.getElementById('pm-advances').textContent = alreadyPaid.toLocaleString('ru-RU') + ' ₽';
+  document.getElementById('pm-remaining').textContent = remaining.toLocaleString('ru-RU') + ' ₽';
+  document.getElementById('pm-amount').value = remaining;
+  const modal = document.getElementById('payment-modal');
+  modal.style.display = 'flex';
+  document.getElementById('pm-amount').focus();
+}
+
+function closePaymentModal() {
+  document.getElementById('payment-modal').style.display = 'none';
+  _currentPaymentName = null;
+}
+
+async function confirmPaymentModal() {
+  const name = _currentPaymentName;
+  if (!name) return;
+  const d = fotData[name];
+  const finalAmount = parseFloat(document.getElementById('pm-amount').value) || 0;
+  const method = document.getElementById('pm-method').value;
+  const alreadyPaid = d.savedAdvance || 0;
+  const totalPaid = alreadyPaid + finalAmount;
+  const advCash = method === 'cash' ? alreadyPaid + finalAmount : alreadyPaid;
+  const advTransfer = method === 'transfer' ? finalAmount : 0;
+  
+  closePaymentModal();
 
   const resp = await fetch('/payroll/mark-paid', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({
       id: d.savedId,
-      total_paid: d.savedAdvance,
-      balance: d.savedAccrued - d.savedAdvance
+      total_paid: totalPaid,
+      balance: (d.savedAccrued || 0) - totalPaid,
+      advance_cash: advCash,
+      advance_transfer: advTransfer
     })
   });
 
@@ -2272,6 +2440,33 @@ async function markPaidStaff(name) {
   }
 }
 </script>
+
+<!-- Модальное окно финальной выплаты -->
+<div id="payment-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:12px;padding:24px;width:420px;max-width:90%;">
+    <h3 id="pm-title" style="margin-bottom:16px;font-size:18px;"></h3>
+    <div style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:16px;font-size:14px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span class="text-muted">Начислено</span><strong id="pm-accrued"></strong></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span class="text-muted">Авансы выданы</span><strong id="pm-advances"></strong></div>
+      <div style="display:flex;justify-content:space-between;border-top:1px solid #dee2e6;padding-top:8px;margin-top:4px;"><span class="fw-bold">Остаток к выплате</span><strong id="pm-remaining" style="color:#2fb344;"></strong></div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:13px;font-weight:600;margin-bottom:4px;display:block;">Сумма выплаты ₽</label>
+      <input type="number" id="pm-amount" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:6px;font-size:15px;" placeholder="Введите сумму">
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="font-size:13px;font-weight:600;margin-bottom:4px;display:block;">Способ оплаты</label>
+      <select id="pm-method" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:6px;font-size:14px;">
+        <option value="transfer">💳 Безнал (перевод)</option>
+        <option value="cash">💵 Наличные</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="confirmPaymentModal()" style="flex:1;padding:10px;background:#2fb344;color:white;border:none;border-radius:6px;font-size:15px;font-weight:600;cursor:pointer;">✅ Подтвердить</button>
+      <button onclick="closePaymentModal()" style="padding:10px 16px;background:#f1f3f5;border:none;border-radius:6px;font-size:15px;cursor:pointer;">Отмена</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>

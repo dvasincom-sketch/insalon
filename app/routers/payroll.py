@@ -34,6 +34,29 @@ async def get_period_payroll(year: int, month: int):
     ).in_("period_start", [period_start_1, period_start_2]).execute()
     return {"records": result.data}
 
+@router.get("/unclosed")
+async def get_unclosed_periods():
+    """Все незакрытые draft периоды за последние 3 месяца"""
+    from datetime import date, timedelta
+    date_from = (date.today().replace(day=1) - timedelta(days=90)).strftime("%Y-%m-%d")
+    result = supabase.table("payroll").select(
+        "staff_name, period_start, period_end, total_accrued, total_paid, balance, status"
+    ).eq("company_id", COMPANY_ID).eq(
+        "status", "draft"
+    ).gt("balance", 0).gte(
+        "period_start", date_from
+    ).order("period_start").execute()
+    
+    # Группируем по периоду
+    periods = {}
+    for p in result.data:
+        key = p["period_start"]
+        if key not in periods:
+            periods[key] = {"period_start": p["period_start"], "period_end": p["period_end"], "staff": []}
+        periods[key]["staff"].append(p)
+    
+    return {"unclosed": list(periods.values())}
+
 @router.get("/draft/{year}/{month}")
 async def get_draft_payroll(year: int, month: int):
     period_start_1 = f"{year}-{month:02d}-01"
@@ -55,6 +78,10 @@ async def mark_paid(data: dict):
     if status == "paid":
         update_data["total_paid"] = data.get("total_paid", 0)
         update_data["balance"] = data.get("balance", 0)
+        if "advance_cash" in data:
+            update_data["advance_cash"] = data["advance_cash"]
+        if "advance_transfer" in data:
+            update_data["advance_transfer"] = data["advance_transfer"]
     supabase.table("payroll").update(update_data).eq("id", record_id).execute()
     return {"status": "ok", "id": record_id}
 

@@ -1,32 +1,157 @@
 // ============ P&L ============
 
+// Текущий проект — по умолчанию салон
+let currentPLProject = 'salon';
+
+function onPLProjectChange() {
+  const sel = document.getElementById('pl-project-select');
+  if (!sel) return;
+  currentPLProject = sel.value;
+  loadPL();
+}
+
 async function loadPL() {
-  const data = await fetchData('/analytics/pl');
+  const tbody = document.getElementById('pl-tbody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="14" class="text-center text-muted py-4">Загрузка...</td></tr>';
+
+  const data = await fetchData(`/analytics/pl?project=${currentPLProject}`);
   if (!data || !data.months) return;
 
+  const months = [...data.months]
+    .filter(m => m.total_revenue > 0)
+    .reverse();
+
+  // Обновляем заголовок таблицы
+  const title = document.getElementById('pl-table-title');
+  if (title && data.project_label) title.textContent = `P&L — ${data.project_label}`;
+
+  // Для не-салонных проектов показываем другой бейдж
+  const badge = document.getElementById('pl-clean-badge');
+  if (badge) {
+    if (currentPLProject === 'salon') {
+      badge.textContent = 'Очищено от личных расходов';
+      badge.className = 'badge bg-green-lt';
+    } else if (currentPLProject === 'consolidated') {
+      badge.textContent = 'Все проекты';
+      badge.className = 'badge bg-blue-lt';
+    } else {
+      badge.textContent = data.project_label || currentPLProject;
+      badge.className = 'badge bg-purple-lt';
+    }
+  }
+
+  renderPLSnapshot(months);
+  renderPLTable(months);
+}
+
+function renderPLSnapshot(months) {
+  if (!months.length) return;
+
+  const last = months[0];
+  const prev = months[1];
+
+  // Выручка
+  const revEl = document.getElementById('pl-snap-revenue');
+  const revDelta = document.getElementById('pl-snap-revenue-delta');
+  if (revEl) revEl.textContent = formatK(last.total_revenue);
+  if (revDelta && prev) {
+    const diff = last.total_revenue - prev.total_revenue;
+    const pct = prev.total_revenue ? Math.round(diff / prev.total_revenue * 100) : 0;
+    const sign = diff >= 0 ? '▲' : '▼';
+    revDelta.textContent = `${sign} ${pct > 0 ? '+' : ''}${pct}% к ${prev.month}`;
+    revDelta.className = 'text-' + (diff >= 0 ? 'green' : 'red') + ' small mt-1';
+  } else if (revDelta) {
+    revDelta.textContent = '';
+  }
+
+  // Расходы
+  const expEl = document.getElementById('pl-snap-expenses');
+  const expDelta = document.getElementById('pl-snap-expenses-delta');
+  if (expEl) expEl.textContent = formatK(last.total_expenses);
+  if (expDelta && prev) {
+    const diff = last.total_expenses - prev.total_expenses;
+    const pct = prev.total_expenses ? Math.round(diff / prev.total_expenses * 100) : 0;
+    const sign = diff >= 0 ? '▲' : '▼';
+    expDelta.textContent = `${sign} ${pct > 0 ? '+' : ''}${pct}% к ${prev.month}`;
+    expDelta.className = 'text-' + (diff >= 0 ? 'red' : 'green') + ' small mt-1';
+  } else if (expDelta) {
+    expDelta.textContent = '';
+  }
+
+  // EBITDA
+  const ebitdaEl = document.getElementById('pl-snap-ebitda');
+  const marginEl = document.getElementById('pl-snap-margin');
+  if (ebitdaEl) {
+    const profit = last.profit ?? (last.total_revenue - last.total_expenses);
+    ebitdaEl.textContent = (profit >= 0 ? '+' : '') + formatK(profit);
+    ebitdaEl.className = 'h2 mb-0 ' + (profit >= 0 ? 'text-green' : 'text-red');
+    if (marginEl && last.total_revenue > 0) {
+      const margin = Math.round(profit / last.total_revenue * 100);
+      marginEl.textContent = `маржа ${margin}%`;
+    } else if (marginEl) {
+      marginEl.textContent = '';
+    }
+  }
+
+  // Лучший месяц по выручке
+  const bestEl = document.getElementById('pl-snap-best-val');
+  const bestMonth = document.getElementById('pl-snap-best-month');
+  if (bestEl && months.length) {
+    const best = months.reduce((a, b) => b.total_revenue > a.total_revenue ? b : a, months[0]);
+    bestEl.textContent = formatK(best.total_revenue);
+    if (bestMonth) bestMonth.textContent = best.month;
+  }
+}
+
+function renderPLTable(months) {
   const tbody = document.getElementById('pl-tbody');
-  tbody.innerHTML = [...data.months]
-    .filter(m => m.total_revenue > 0 || m.total_expenses > 0)
-    .reverse()
-    .map(m => {
-      const profitClass = m.profit >= 0 ? 'text-green fw-bold' : 'text-red fw-bold';
+  if (!months.length) {
+    tbody.innerHTML = '<tr><td colspan="14" class="text-center text-muted py-4">Нет данных за выбранный проект</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = months.map(m => {
+    const profit = m.profit ?? (m.total_revenue - m.total_expenses);
+    const profitClass = profit >= 0 ? 'fw-bold text-green' : 'fw-bold text-red';
+    const profitBg = profit >= 0 ? 'background:#f0fdf4' : 'background:#fff0f0';
+
+    // Для не-салонных проектов revenue_other вместо разбивки
+    const isSalon = currentPLProject === 'salon';
+
+    if (isSalon) {
       return `
       <tr>
         <td><span class="fw-bold">${m.month}</span></td>
-        <td class="text-end">${formatK(m.revenue_services)}</td>
-        <td class="text-end">${formatK(m.revenue_certificates)}</td>
-        <td class="text-end">${formatK(m.revenue_abonements)}</td>
-        <td class="text-end">${formatK(m.revenue_fitmost)}</td>
-        <td class="text-end fw-bold">${formatK(m.total_revenue)}</td>
-        <td class="text-end text-red">${formatK(m.salary)}</td>
-        <td class="text-end text-red">${formatK(m.rent)}</td>
-        <td class="text-end text-red">${formatK(m.cosmetics)}</td>
-        <td class="text-end text-red">${formatK(m.materials)}</td>
-        <td class="text-end text-red">${formatK(m.marketing)}</td>
-        <td class="text-end text-red">${formatK(m.bank_fees)}</td>
-        <td class="text-end text-red">${formatK(m.taxes)}</td>
-        <td class="text-end fw-bold text-red">${formatK(m.total_expenses)}</td>
-        <td class="text-end ${profitClass}">${formatK(m.profit)}</td>
+        <td class="text-end" style="color:#2f9e44">${formatK(m.revenue_services)}</td>
+        <td class="text-end" style="color:#2f9e44">${formatK(m.revenue_certificates)}</td>
+        <td class="text-end" style="color:#2f9e44">${formatK(m.revenue_abonements)}</td>
+        <td class="text-end" style="color:#2f9e44">${formatK(m.revenue_fitmost)}</td>
+        <td class="text-end fw-bold" style="background:#d3f9d8;color:#1e7e34">${formatK(m.total_revenue)}</td>
+        <td class="text-end" style="color:#c92a2a">${formatK(m.salary)}</td>
+        <td class="text-end" style="color:#c92a2a">${formatK(m.rent)}</td>
+        <td class="text-end" style="color:#c92a2a">${formatK(m.cosmetics)}</td>
+        <td class="text-end" style="color:#c92a2a">${formatK(m.materials)}</td>
+        <td class="text-end" style="color:#c92a2a">${formatK(m.marketing)}</td>
+        <td class="text-end" style="color:#c92a2a">${formatK(m.bank_fees)}</td>
+        <td class="text-end fw-bold" style="background:#ffe0e0;color:#c92a2a">${formatK(m.total_expenses)}</td>
+        <td class="text-end ${profitClass}" style="${profitBg}">${profit >= 0 ? '+' : ''}${formatK(profit)}</td>
       </tr>`;
-    }).join('');
+    } else {
+      // Для других проектов — упрощённая строка: Доходы | Расходы | EBITDA
+      return `
+      <tr>
+        <td><span class="fw-bold">${m.month}</span></td>
+        <td class="text-end" style="color:#2f9e44" colspan="4">${formatK(m.revenue_other || m.total_revenue)}</td>
+        <td class="text-end fw-bold" style="background:#d3f9d8;color:#1e7e34">${formatK(m.total_revenue)}</td>
+        <td class="text-end" style="color:#c92a2a">${formatK(m.salary)}</td>
+        <td class="text-end" style="color:#c92a2a">${formatK(m.rent)}</td>
+        <td class="text-end" style="color:#c92a2a">${formatK(m.cosmetics)}</td>
+        <td class="text-end" style="color:#c92a2a">${formatK(m.materials)}</td>
+        <td class="text-end" style="color:#c92a2a">${formatK(m.marketing)}</td>
+        <td class="text-end" style="color:#c92a2a">${formatK(m.bank_fees)}</td>
+        <td class="text-end fw-bold" style="background:#ffe0e0;color:#c92a2a">${formatK(m.total_expenses)}</td>
+        <td class="text-end ${profitClass}" style="${profitBg}">${profit >= 0 ? '+' : ''}${formatK(profit)}</td>
+      </tr>`;
+    }
+  }).join('');
 }

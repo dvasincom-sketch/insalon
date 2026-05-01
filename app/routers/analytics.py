@@ -68,116 +68,195 @@ async def analytics_services():
         return {"error": str(e)}
 
 
+# Проекты для консолидированного отчёта (всё кроме internal/personal/unknown)
+CONSOLIDATED_EXCLUDE = ["internal", "personal", "unknown", "transfer_in"]
+
+# Человеческие названия проектов
+PROJECT_LABELS = {
+    "salon": "Салон (HeadSPA)",
+    "podcast": "Подкаст (NOISHA)",
+    "book": "Книга",
+    "consulting": "Консалтинг",
+    "startup": "Стартап",
+    "enzyme": "Enzyme",
+    "consolidated": "Консолидированный",
+}
+
+
+def _build_pl_months(monthly: dict) -> list:
+    """Собирает итоговый список месяцев из monthly-словаря"""
+    result = []
+    for month in sorted(monthly.keys()):
+        d = monthly[month]
+        total_revenue = (
+            d["revenue_services"] + d["revenue_certificates"] +
+            d["revenue_abonements"] + d["revenue_fitmost"] + d["revenue_other"]
+        )
+        total_expenses = sum([
+            d["salary"], d["rent"], d["materials"], d["cosmetics"], d["marketing"],
+            d["credit_card"], d["it"], d["equipment"], d["transport"],
+            d["bank_fees"], d["other"]
+        ])
+        profit = total_revenue - total_expenses
+        result.append({
+            "month": month,
+            "revenue_services": round(d["revenue_services"]),
+            "revenue_certificates": round(d["revenue_certificates"]),
+            "revenue_abonements": round(d["revenue_abonements"]),
+            "revenue_fitmost": round(d["revenue_fitmost"]),
+            "revenue_other": round(d["revenue_other"]),
+            "total_revenue": round(total_revenue),
+            "salary": round(d["salary"]),
+            "rent": round(d["rent"]),
+            "materials": round(d["materials"]),
+            "cosmetics": round(d["cosmetics"]),
+            "marketing": round(d["marketing"]),
+            "bank_fees": round(d["bank_fees"]),
+            "other": round(d["credit_card"] + d["it"] + d["equipment"] + d["transport"] + d["other"]),
+            "total_expenses": round(total_expenses),
+            "profit": round(profit)
+        })
+    return result
+
+
+def _empty_month():
+    return {
+        "revenue_services": 0, "revenue_certificates": 0,
+        "revenue_abonements": 0, "revenue_fitmost": 0, "revenue_other": 0,
+        "salary": 0, "rent": 0, "materials": 0,
+        "marketing": 0, "credit_card": 0, "it": 0,
+        "equipment": 0, "transport": 0,
+        "bank_fees": 0, "cosmetics": 0, "other": 0
+    }
+
+
 @router.get("/pl", summary="P&L по месяцам")
-async def analytics_pl():
+async def analytics_pl(project: str = "salon"):
     try:
         from app.database import supabase
 
-        # Загружаем все данные с пагинацией
-        transactions_data = fetch_all(supabase, lambda: supabase.table("transactions").select("date, amount, type_title").eq("company_id", COMPANY_ID).gt("amount", 0))
+        monthly = defaultdict(_empty_month)
 
-        fitmost_data = fetch_all(supabase, lambda: supabase.table("bank_transactions").select("period, date, amount").eq("company_id", COMPANY_ID).eq("type", "Кредит").ilike("counterparty", "%фитмост%"))
+        # ── САЛОН ──────────────────────────────────────────────────────────────
+        if project in ("salon", "consolidated"):
+            # Выручка из YCLIENTS
+            transactions_data = fetch_all(supabase, lambda: supabase.table("transactions").select("date, amount, type_title").eq("company_id", COMPANY_ID).gt("amount", 0))
+            for t in transactions_data:
+                month = t["date"][:7]
+                amount = float(t["amount"] or 0)
+                type_title = t.get("type_title", "") or ""
+                if "услуг" in type_title.lower():
+                    monthly[month]["revenue_services"] += amount
+                elif "сертификат" in type_title.lower():
+                    monthly[month]["revenue_certificates"] += amount
+                elif "абонемент" in type_title.lower():
+                    monthly[month]["revenue_abonements"] += amount
 
-        expenses_data = fetch_all(supabase, lambda: supabase.table("personal_transactions").select("date, amount, expense_category").eq("company_id", COMPANY_ID).lt("amount", 0).not_.in_("expense_category", ["internal", "personal", "transfer_in"]))
+            # Fitmost
+            fitmost_data = fetch_all(supabase, lambda: supabase.table("bank_transactions").select("period, date, amount").eq("company_id", COMPANY_ID).eq("type", "Кредит").ilike("counterparty", "%фитмост%"))
+            for f in fitmost_data:
+                period = f.get("period") or f["date"]
+                month = period[:7]
+                monthly[month]["revenue_fitmost"] += float(f["amount"] or 0)
 
-        payroll_data = fetch_all(supabase, lambda: supabase.table("payroll").select("period_start, total_accrued").eq("company_id", COMPANY_ID))
+            # ФОТ из payroll
+            payroll_data = fetch_all(supabase, lambda: supabase.table("payroll").select("period_start, total_accrued").eq("company_id", COMPANY_ID))
+            for p in payroll_data:
+                month = p["period_start"][:7]
+                monthly[month]["salary"] += float(p["total_accrued"] or 0)
 
-        bank_fees_data = fetch_all(supabase, lambda: supabase.table("bank_transactions").select("date, amount").eq("company_id", COMPANY_ID).eq("category", "bank_fee").lt("amount", 0))
+            # Банковские комиссии
+            bank_fees_data = fetch_all(supabase, lambda: supabase.table("bank_transactions").select("date, amount").eq("company_id", COMPANY_ID).eq("category", "bank_fee").lt("amount", 0))
+            for b in bank_fees_data:
+                month = b["date"][:7]
+                monthly[month]["bank_fees"] += abs(float(b["amount"] or 0))
 
-        salon_rent_data = fetch_all(supabase, lambda: supabase.table("bank_transactions").select("period, date, amount, description").eq("company_id", COMPANY_ID).eq("category", "salon_rent").lt("amount", 0))
+            # Косметика
+            cosmetics_data = fetch_all(supabase, lambda: supabase.table("bank_transactions").select("date, amount").eq("company_id", COMPANY_ID).eq("category", "cosmetics").lt("amount", 0))
+            for c in cosmetics_data:
+                month = c["date"][:7]
+                monthly[month]["cosmetics"] += abs(float(c["amount"] or 0))
 
-        cosmetics_data = fetch_all(supabase, lambda: supabase.table("bank_transactions").select("date, amount").eq("company_id", COMPANY_ID).eq("category", "cosmetics").lt("amount", 0))
+            # Аренда
+            salon_rent_data = fetch_all(supabase, lambda: supabase.table("bank_transactions").select("period, date, amount, description").eq("company_id", COMPANY_ID).eq("category", "salon_rent").lt("amount", 0))
+            for r in salon_rent_data:
+                period = r.get("period") or r["date"]
+                month = period[:7]
+                amount = abs(float(r["amount"] or 0))
+                if "рекламного" in (r.get("description") or "").lower():
+                    monthly[month]["marketing"] += amount
+                else:
+                    monthly[month]["rent"] += amount
 
-        monthly = defaultdict(lambda: {
-            "revenue_services": 0, "revenue_certificates": 0,
-            "revenue_abonements": 0, "revenue_fitmost": 0,
-            "salary": 0, "rent": 0, "materials": 0,
-            "marketing": 0, "credit_card": 0, "it": 0,
-            "equipment": 0, "transport": 0,
-            "bank_fees": 0, "cosmetics": 0, "other": 0
-        })
+            # Расходы салона из personal_transactions
+            salon_expenses = fetch_all(supabase, lambda: supabase.table("personal_transactions").select("date, amount, expense_category").eq("company_id", COMPANY_ID).eq("project", "salon").lt("amount", 0))
+            known_cats = ["rent", "materials", "marketing", "credit_card", "it", "equipment", "transport"]
+            for e in salon_expenses:
+                month = e["date"][:7]
+                cat = e["expense_category"]
+                amount = abs(float(e["amount"] or 0))
+                if cat == "salary":
+                    pass  # берём из payroll
+                elif cat in known_cats:
+                    monthly[month][cat] += amount
+                else:
+                    monthly[month]["other"] += amount
 
-        for t in transactions_data:
-            month = t["date"][:7]
-            amount = float(t["amount"] or 0)
-            type_title = t.get("type_title", "")
-            if "услуг" in type_title.lower():
-                monthly[month]["revenue_services"] += amount
-            elif "сертификат" in type_title.lower():
-                monthly[month]["revenue_certificates"] += amount
-            elif "абонемент" in type_title.lower():
-                monthly[month]["revenue_abonements"] += amount
+        # ── ДРУГИЕ ПРОЕКТЫ (podcast / book / consulting / startup / enzyme) ────
+        if project not in ("salon", "consolidated"):
+            # Доходы проекта из personal_transactions (положительные)
+            income_data = fetch_all(supabase, lambda: supabase.table("personal_transactions").select("date, amount, expense_category").eq("company_id", COMPANY_ID).eq("project", project).gt("amount", 0))
+            for i in income_data:
+                month = i["date"][:7]
+                monthly[month]["revenue_other"] += float(i["amount"] or 0)
 
-        for f in fitmost_data:
-            period = f.get("period") or f["date"]
-            month = period[:7]
-            monthly[month]["revenue_fitmost"] += float(f["amount"] or 0)
+            # Также доходы из bank_transactions по проекту
+            bank_income = fetch_all(supabase, lambda: supabase.table("bank_transactions").select("date, amount").eq("company_id", COMPANY_ID).eq("project", project).gt("amount", 0))
+            for b in bank_income:
+                month = b["date"][:7]
+                monthly[month]["revenue_other"] += float(b["amount"] or 0)
 
-        for p in payroll_data:
-            month = p["period_start"][:7]
-            monthly[month]["salary"] += float(p["total_accrued"] or 0)
+        if project != "salon":
+            # Расходы проекта из personal_transactions
+            proj_filter = project if project != "consolidated" else None
+            known_cats = ["rent", "materials", "marketing", "credit_card", "it", "equipment", "transport"]
 
-        known_cats = ["rent", "materials", "marketing", "credit_card", "it", "equipment", "transport"]
-        for e in expenses_data:
-            month = e["date"][:7]
-            cat = e["expense_category"]
-            amount = abs(float(e["amount"] or 0))
-            if cat == "salary":
-                pass
-            elif cat in known_cats:
-                monthly[month][cat] += amount
+            if proj_filter:
+                expenses_data = fetch_all(supabase, lambda: supabase.table("personal_transactions").select("date, amount, expense_category, project").eq("company_id", COMPANY_ID).eq("project", proj_filter).lt("amount", 0))
             else:
-                monthly[month]["other"] += amount
+                # consolidated — все кроме internal/personal/unknown
+                expenses_data = fetch_all(supabase, lambda: supabase.table("personal_transactions").select("date, amount, expense_category, project").eq("company_id", COMPANY_ID).lt("amount", 0).not_.in_("project", CONSOLIDATED_EXCLUDE).not_.in_("expense_category", ["internal", "transfer_in"]))
 
-        for b in bank_fees_data:
-            month = b["date"][:7]
-            monthly[month]["bank_fees"] += abs(float(b["amount"] or 0))
+            for e in expenses_data:
+                if project == "consolidated" and e.get("project") == "salon":
+                    continue  # салонные расходы уже добавлены выше
+                month = e["date"][:7]
+                cat = e["expense_category"]
+                amount = abs(float(e["amount"] or 0))
+                if cat == "salary":
+                    pass
+                elif cat in known_cats:
+                    monthly[month][cat] += amount
+                else:
+                    monthly[month]["other"] += amount
 
-        for c in cosmetics_data:
-            month = c["date"][:7]
-            monthly[month]["cosmetics"] += abs(float(c["amount"] or 0))
-
-        for r in salon_rent_data:
-            period = r.get("period") or r["date"]
-            month = period[:7]
-            amount = abs(float(r["amount"] or 0))
-            if "рекламного" in (r.get("description") or "").lower():
-                monthly[month]["marketing"] += amount
+            # Расходы из bank_transactions по проекту
+            if proj_filter:
+                bank_exp = fetch_all(supabase, lambda: supabase.table("bank_transactions").select("date, amount, category").eq("company_id", COMPANY_ID).eq("project", proj_filter).lt("amount", 0))
             else:
-                monthly[month]["rent"] += amount
+                bank_exp = fetch_all(supabase, lambda: supabase.table("bank_transactions").select("date, amount, category").eq("company_id", COMPANY_ID).lt("amount", 0).not_.in_("project", CONSOLIDATED_EXCLUDE))
 
-        result = []
-        for month in sorted(monthly.keys()):
-            d = monthly[month]
-            total_revenue = (
-                d["revenue_services"] + d["revenue_certificates"] +
-                d["revenue_abonements"] + d["revenue_fitmost"]
-            )
-            total_expenses = sum([
-                d["salary"], d["rent"], d["materials"], d["cosmetics"], d["marketing"],
-                d["credit_card"], d["it"], d["equipment"], d["transport"],
-                d["bank_fees"], d["other"]
-            ])
-            profit = total_revenue - total_expenses
-            result.append({
-                "month": month,
-                "revenue_services": round(d["revenue_services"]),
-                "revenue_certificates": round(d["revenue_certificates"]),
-                "revenue_abonements": round(d["revenue_abonements"]),
-                "revenue_fitmost": round(d["revenue_fitmost"]),
-                "total_revenue": round(total_revenue),
-                "salary": round(d["salary"]),
-                "rent": round(d["rent"]),
-                "materials": round(d["materials"]),
-                "cosmetics": round(d["cosmetics"]),
-                "marketing": round(d["marketing"]),
-                "bank_fees": round(d["bank_fees"]),
-                "other": round(d["credit_card"] + d["it"] + d["equipment"] + d["transport"] + d["other"]),
-                "total_expenses": round(total_expenses),
-                "profit": round(profit)
-            })
+            for b in bank_exp:
+                if project == "consolidated" and b.get("category") in ("bank_fee", "cosmetics", "salon_rent"):
+                    continue  # уже добавлены выше
+                month = b["date"][:7]
+                monthly[month]["other"] += abs(float(b["amount"] or 0))
 
-        return {"months": result}
+        return {
+            "project": project,
+            "project_label": PROJECT_LABELS.get(project, project),
+            "months": _build_pl_months(monthly)
+        }
     except Exception as e:
         import traceback
         return {"error": str(e), "trace": traceback.format_exc()}

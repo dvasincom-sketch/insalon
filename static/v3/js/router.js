@@ -1,24 +1,84 @@
 // ============ ROUTER ============
-// Флаги lazy-load экранов (были window.* в оригинале)
-let plLoaded       = false;
-let staffLoaded    = false;
-let oblLoaded      = false;
+let plLoaded    = false;
+let staffLoaded = false;
+let oblLoaded   = false;
 
-function showScreen(name) {
+const TITLES = {
+  pulse:       'Пульс системы',
+  pl:          'P&L отчёт',
+  staff:       'Сотрудники',
+  obligations: 'Обязательства'
+};
+
+const STAFF_TABS = ['efficiency', 'schedule', 'payroll', 'checks', 'fot'];
+
+function _hideAllStaffTabs() {
+  STAFF_TABS.forEach(t => {
+    const el = document.getElementById('staff-tab-' + t);
+    if (el) el.classList.add('d-none');
+  });
+}
+
+function showScreen(name, tab) {
+  // Скрываем все экраны
   ['pulse', 'pl', 'staff', 'obligations'].forEach(s => {
     document.getElementById('screen-' + s).classList.add('d-none');
   });
+
+  // Всегда скрываем табы staff при смене экрана
+  _hideAllStaffTabs();
+
   document.getElementById('screen-' + name).classList.remove('d-none');
+  document.getElementById('page-title').textContent = TITLES[name] || name;
 
-  const titles = {
-    pulse:       'Пульс системы',
-    pl:          'P&L отчёт',
-    staff:       'Сотрудники',
-    obligations: 'Обязательства'
-  };
-  document.getElementById('page-title').textContent = titles[name];
+  // Активный пункт меню
+  document.querySelectorAll('.navbar-nav .nav-link').forEach(el => el.classList.remove('active'));
+  const activeLink = document.querySelector(`.navbar-nav .nav-link[data-screen="${name}"]`);
+  if (activeLink) activeLink.classList.add('active');
 
+  // Lazy-load
   if (name === 'pl'          && !plLoaded)    { loadPL();          plLoaded    = true; }
   if (name === 'staff'       && !staffLoaded) { loadStaff();       staffLoaded = true; }
   if (name === 'obligations' && !oblLoaded)   { loadObligations(); oblLoaded   = true; }
+
+  // Переключаем таб если передан, иначе показываем первый
+  if (name === 'staff') {
+    _activateStaffTab(tab || 'efficiency');
+  }
+
+  // Пишем в URL
+  const hash = (name === 'staff')
+    ? `staff/${tab || 'efficiency'}`
+    : name;
+  if (location.hash !== '#' + hash) {
+    history.pushState({ screen: name, tab: tab || null }, '', '#' + hash);
+  }
 }
+
+function _activateStaffTab(tab) {
+  _hideAllStaffTabs();
+
+  const target = document.getElementById('staff-tab-' + tab);
+  if (target) target.classList.remove('d-none');
+
+  // Активная вкладка в nav
+  document.querySelectorAll('.card-header-tabs .nav-link').forEach(l => l.classList.remove('active'));
+  const tabLink = document.querySelector(`.card-header-tabs .nav-link[data-tab="${tab}"]`);
+  if (tabLink) tabLink.classList.add('active');
+}
+
+function showStaffTab(tab, el) {
+  _activateStaffTab(tab);
+  history.pushState({ screen: 'staff', tab }, '', '#staff/' + tab);
+}
+
+function routeFromHash() {
+  const hash = location.hash.replace('#', '') || 'pulse';
+  const [screen, tab] = hash.split('/');
+  const validScreens = ['pulse', 'pl', 'staff', 'obligations'];
+  const target = validScreens.includes(screen) ? screen : 'pulse';
+  showScreen(target, tab || null);
+}
+
+window.addEventListener('popstate', routeFromHash);
+document.addEventListener('DOMContentLoaded', routeFromHash);

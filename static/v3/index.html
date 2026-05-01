@@ -52,7 +52,7 @@
       <div class="collapse navbar-collapse" id="sidebar-menu">
         <ul class="navbar-nav pt-lg-3">
           <li class="nav-item">
-            <a class="nav-link active" href="#" onclick="showScreen('pulse')">
+            <a class="nav-link active" href="#pulse" data-screen="pulse">
               <span class="nav-link-icon d-md-none d-lg-inline-block">
                 <i class="ti ti-activity"></i>
               </span>
@@ -60,7 +60,7 @@
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="#" onclick="showScreen('pl')">
+            <a class="nav-link" href="#pl" data-screen="pl">
               <span class="nav-link-icon d-md-none d-lg-inline-block">
                 <i class="ti ti-report-money"></i>
               </span>
@@ -68,7 +68,7 @@
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="#" onclick="showScreen('staff')">
+            <a class="nav-link" href="#staff" data-screen="staff">
               <span class="nav-link-icon d-md-none d-lg-inline-block">
                 <i class="ti ti-users"></i>
               </span>
@@ -76,7 +76,7 @@
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="#" onclick="showScreen('obligations')">
+            <a class="nav-link" href="#obligations" data-screen="obligations">
               <span class="nav-link-icon d-md-none d-lg-inline-block">
                 <i class="ti ti-calendar-due"></i>
               </span>
@@ -340,40 +340,94 @@
     <!-- Screen 2: P&L -->
     <div class="page-body d-none" id="screen-pl">
       <div class="container-xl">
+
+        <!-- Snapshot карточки -->
+        <div class="row row-deck row-cards mb-3" id="pl-snapshot">
+          <div class="col-6 col-md-3">
+            <div class="card">
+              <div class="card-body">
+                <div class="text-muted small mb-1">Выручка (посл. месяц)</div>
+                <div class="h2 mb-0" id="pl-snap-revenue">—</div>
+                <div class="text-muted small mt-1" id="pl-snap-revenue-delta"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="card">
+              <div class="card-body">
+                <div class="text-muted small mb-1">Расходы (посл. месяц)</div>
+                <div class="h2 mb-0 text-red" id="pl-snap-expenses">—</div>
+                <div class="text-muted small mt-1" id="pl-snap-expenses-delta"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="card">
+              <div class="card-body">
+                <div class="text-muted small mb-1">EBITDA (посл. месяц)</div>
+                <div class="h2 mb-0" id="pl-snap-ebitda">—</div>
+                <div class="text-muted small mt-1" id="pl-snap-margin"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="card">
+              <div class="card-body">
+                <div class="text-muted small mb-1">Лучший месяц</div>
+                <div class="h2 mb-0 text-green" id="pl-snap-best-val">—</div>
+                <div class="text-muted small mt-1" id="pl-snap-best-month"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Таблица P&L -->
         <div class="card">
           <div class="card-header">
-            <h3 class="card-title">P&L по месяцам (только салон)</h3>
-            <div class="card-options">
-              <span class="badge bg-green-lt">Очищено от личных расходов</span>
+            <h3 class="card-title" id="pl-table-title">P&L по месяцам</h3>
+            <div class="card-options d-flex align-items-center gap-2">
+              <span class="badge bg-green-lt" id="pl-clean-badge">Очищено от личных расходов</span>
+              <select class="form-select form-select-sm" id="pl-project-select" onchange="onPLProjectChange()" style="width:auto">
+                <option value="salon" selected>✨ Салон (HeadSPA)</option>
+                <option value="podcast">🎙 Подкаст (NOISHA)</option>
+                <option value="book">📖 Книга</option>
+                <option value="consulting">💼 Консалтинг</option>
+                <option value="startup">🚀 Стартап</option>
+                <option value="consolidated">🗂 Консолидированный</option>
+              </select>
             </div>
           </div>
           <div class="table-responsive">
-            <table class="table table-vcenter table-striped card-table">
+            <table class="table table-vcenter card-table" style="font-size:13px">
               <thead>
                 <tr>
-                  <th>Месяц</th>
-                  <th class="text-end">Услуги</th>
-                  <th class="text-end">Сертификаты</th>
-                  <th class="text-end">Абонементы</th>
-                  <th class="text-end">Fitmost</th>
-                  <th class="text-end fw-bold">Доходы</th>
-                  <th class="text-end">Зарплата</th>
-                  <th class="text-end">Аренда</th>
-                  <th class="text-end">Косметика</th>
-                  <th class="text-end">Материалы</th>
-                  <th class="text-end">Маркетинг</th>
-                  <th class="text-end">Банк</th>
-                  <th class="text-end">Налоги</th>
-                  <th class="text-end fw-bold">Расходы</th>
-                  <th class="text-end fw-bold">Прибыль</th>
+                  <th rowspan="2" style="vertical-align:middle;min-width:80px">Месяц</th>
+                  <th colspan="5" class="text-center text-green fw-bold" style="background:#d3f9d8;border-bottom:none;padding-bottom:4px">Выручка</th>
+                  <th colspan="7" class="text-center text-red fw-bold" style="background:#ffe0e0;border-bottom:none;padding-bottom:4px">Расходы</th>
+                  <th rowspan="2" class="text-end fw-bold" style="vertical-align:middle;background:#e8f4fd;min-width:80px">EBITDA</th>
+                </tr>
+                <tr>
+                  <th class="text-end" style="background:#f0fdf4">Услуги</th>
+                  <th class="text-end" style="background:#f0fdf4">Сертиф.</th>
+                  <th class="text-end" style="background:#f0fdf4">Абон.</th>
+                  <th class="text-end" style="background:#f0fdf4">Fitmost</th>
+                  <th class="text-end fw-bold" style="background:#d3f9d8">Итого</th>
+                  <th class="text-end" style="background:#fff5f5">ФОТ</th>
+                  <th class="text-end" style="background:#fff5f5">Аренда</th>
+                  <th class="text-end" style="background:#fff5f5">Космет.</th>
+                  <th class="text-end" style="background:#fff5f5">Матер.</th>
+                  <th class="text-end" style="background:#fff5f5">Маркет.</th>
+                  <th class="text-end" style="background:#fff5f5">Банк</th>
+                  <th class="text-end fw-bold" style="background:#ffe0e0">Итого</th>
                 </tr>
               </thead>
               <tbody id="pl-tbody">
-                <tr><td colspan="15" class="text-center text-muted py-4">Загрузка...</td></tr>
+                <tr><td colspan="14" class="text-center text-muted py-4">Загрузка...</td></tr>
               </tbody>
             </table>
           </div>
         </div>
+
       </div>
     </div>
 
@@ -386,19 +440,19 @@
           <div class="card-header">
             <ul class="nav nav-tabs card-header-tabs">
               <li class="nav-item">
-                <a class="nav-link active" href="#" onclick="showStaffTab('efficiency', this)" style="padding:0.5rem 0.75rem;white-space:nowrap">📊 Эффективность</a>
+                <a class="nav-link active" href="javascript:void(0)" data-tab="efficiency" onclick="showStaffTab('efficiency', this)" style="padding:0.5rem 0.75rem;white-space:nowrap">📊 Эффективность</a>
               </li>
               <li class="nav-item">
-                <a class="nav-link" href="#" onclick="showStaffTab('schedule', this)" style="padding:0.5rem 0.75rem;white-space:nowrap">📅 Расписание</a>
+                <a class="nav-link" href="javascript:void(0)" data-tab="schedule" onclick="showStaffTab('schedule', this)" style="padding:0.5rem 0.75rem;white-space:nowrap">📅 Расписание</a>
               </li>
               <li class="nav-item">
-                <a class="nav-link" href="#" onclick="showStaffTab('payroll', this)" style="padding:0.5rem 0.75rem;white-space:nowrap">💰 Оплата труда</a>
+                <a class="nav-link" href="javascript:void(0)" data-tab="payroll" onclick="showStaffTab('payroll', this)" style="padding:0.5rem 0.75rem;white-space:nowrap">💰 Оплата труда</a>
               </li>
               <li class="nav-item">
-                <a class="nav-link" href="#" onclick="showStaffTab('checks', this)" style="padding:0.5rem 0.75rem;white-space:nowrap">✅ Статус</a>
+                <a class="nav-link" href="javascript:void(0)" data-tab="checks" onclick="showStaffTab('checks', this)" style="padding:0.5rem 0.75rem;white-space:nowrap">✅ Статус</a>
               </li>
               <li class="nav-item">
-                <a class="nav-link" href="#" onclick="showStaffTab('fot', this)" style="padding:0.5rem 0.75rem;white-space:nowrap">🧮 Расчёт ФОТ</a>
+                <a class="nav-link" href="javascript:void(0)" data-tab="fot" onclick="showStaffTab('fot', this)" style="padding:0.5rem 0.75rem;white-space:nowrap">🧮 Расчёт ФОТ</a>
               </li>
             </ul>
           </div>

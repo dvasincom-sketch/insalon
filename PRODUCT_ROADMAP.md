@@ -643,3 +643,12 @@ Fitmost запись: цена = прайс × 0.65 (скидка 35%)
 - visit_pay в payroll вычислять динамически из visit_records (не хранить отдельно)
 - Webhook обработка удалённых записей YCLIENTS
 - Cron автосинхронизация
+
+### Дополнено 01.05.2026 (закрытие сессии)
+
+**Реализованные принципы Клеппмана:**
+- ✅ Идемпотентность — upsert в import_bank.py и import_personal.py
+- ✅ UNIQUE constraint на bank_transactions и personal_transactions
+- ✅ Удалены дубли из bank_transactions (осталось 1552 записи)
+- ✅ Аудируемость — payroll_audit триггер
+- ✅ ENMV принцип — оранжевая плашка незакрытых периодов в ФОТ

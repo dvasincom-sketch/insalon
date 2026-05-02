@@ -111,11 +111,7 @@ export default function Contacts({ booking, next, back }) {
         client_email: email,
         extras: booking.extras.map(e => ({ id: e.id, title: e.title })),
       });
-      if (result.confirmation_token) {
-        next({ _confirmationToken: result.confirmation_token, _bookingId: result.booking_id });
-      } else {
-        window.top.location.href = result.payment_url;
-      }
+      window.top.location.href = result.payment_url;
     } catch {
       setSubmitting(false);
     }

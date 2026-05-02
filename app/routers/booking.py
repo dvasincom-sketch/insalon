@@ -158,7 +158,8 @@ async def create_booking(data: dict = Body(...)):
         payment = Payment.create({
             "amount": {"value": "2000.00", "currency": "RUB"},
             "confirmation": {
-                "type": "embedded",
+                "type": "redirect",
+                "return_url": f"{base_url}/booking/?booking_id={booking_id}"
             },
             "capture": True,
             "description": f"Бронирование #{booking_id} — HeadSPA Beauty",
@@ -168,10 +169,8 @@ async def create_booking(data: dict = Body(...)):
             "payment_id": payment.id,
             "status": "waiting_payment"
         }).eq("id", booking_id).execute()
-        import json as _json
-        conf_data = _json.loads(payment.confirmation.json())
-        payment_url = conf_data.get("confirmation_url", "")
-        confirmation_token = conf_data.get("confirmation_token")
+        payment_url = payment.confirmation.confirmation_url
+        confirmation_token = None
     except Exception as e:
         print(f"[PAYMENT] Ошибка создания платежа: {e}")
         base_url = os.getenv("BOOKING_BASE_URL", "https://insalon.onrender.com")

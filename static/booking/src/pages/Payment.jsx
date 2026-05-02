@@ -30,7 +30,7 @@ export default function Payment({ booking, confirmationToken, bookingId, onSucce
           border: { enabled: true, value: T.border },
           text: { enabled: true, value: T.text },
         },
-        payment_methods: ["bank_card", "yoo_money"],
+        payment_methods: ["bank_card"],
       },
       error_callback: (err) => {
         console.error("ЮKassa error:", err);

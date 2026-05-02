@@ -5,7 +5,7 @@ from datetime import date
 import os
 from supabase import create_client
 
-router = APIRouter(prefix="/api/dev-sessions", tags=["dev-sessions"])
+router = APIRouter(prefix="/dev-sessions", tags=["dev-sessions"])
 
 def get_sb():
     return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])

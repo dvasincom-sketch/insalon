@@ -149,8 +149,31 @@ async def create_booking(data: dict = Body(...)):
     except Exception as e:
         print(f"[BOOKING] Ошибка создания записи в YCLIENTS: {e}")
 
-    # 5. TODO: заменить на реальный ЮKassa платёж
-    payment_url = f"http://localhost:5174/success?booking_id={booking_id}"
+    # 5. Создаём платёж в ЮKassa
+    try:
+        from app.routers.payments import get_yookassa
+        import uuid
+        Payment = get_yookassa()
+        base_url = os.getenv("BOOKING_BASE_URL", "https://insalon.onrender.com")
+        payment = Payment.create({
+            "amount": {"value": "2000.00", "currency": "RUB"},
+            "confirmation": {
+                "type": "redirect",
+                "return_url": f"{base_url}/booking/?booking_id={booking_id}"
+            },
+            "capture": True,
+            "description": f"Бронирование #{booking_id} — HeadSPA Beauty",
+            "metadata": {"booking_id": str(booking_id)}
+        }, uuid.uuid4())
+        supabase.table("bookings").update({
+            "payment_id": payment.id,
+            "status": "waiting_payment"
+        }).eq("id", booking_id).execute()
+        payment_url = payment.confirmation.confirmation_url
+    except Exception as e:
+        print(f"[PAYMENT] Ошибка создания платежа: {e}")
+        base_url = os.getenv("BOOKING_BASE_URL", "https://insalon.onrender.com")
+        payment_url = f"{base_url}/booking/?booking_id={booking_id}"
 
     return {"booking_id": booking_id, "payment_url": payment_url}
 

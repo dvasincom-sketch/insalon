@@ -158,8 +158,7 @@ async def create_booking(data: dict = Body(...)):
         payment = Payment.create({
             "amount": {"value": "2000.00", "currency": "RUB"},
             "confirmation": {
-                "type": "redirect",
-                "return_url": f"{base_url}/booking/?booking_id={booking_id}"
+                "type": "embedded",
             },
             "capture": True,
             "description": f"Бронирование #{booking_id} — HeadSPA Beauty",
@@ -170,12 +169,14 @@ async def create_booking(data: dict = Body(...)):
             "status": "waiting_payment"
         }).eq("id", booking_id).execute()
         payment_url = payment.confirmation.confirmation_url
+        confirmation_token = payment.confirmation.confirmation_token if hasattr(payment.confirmation, 'confirmation_token') else None
     except Exception as e:
         print(f"[PAYMENT] Ошибка создания платежа: {e}")
         base_url = os.getenv("BOOKING_BASE_URL", "https://insalon.onrender.com")
         payment_url = f"{base_url}/booking/?booking_id={booking_id}"
+        confirmation_token = None
 
-    return {"booking_id": booking_id, "payment_url": payment_url}
+    return {"booking_id": booking_id, "payment_url": payment_url, "confirmation_token": confirmation_token}
 
 @router.get("/nearest_slot")
 async def get_nearest_slot(duration: int, service_id: int = 0):

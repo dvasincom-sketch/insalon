@@ -6,9 +6,10 @@ import DateTime from "./pages/DateTime";
 import Master from "./pages/Master";
 import Contacts from "./pages/Contacts";
 import Success from "./pages/Success";
+import Payment from "./pages/Payment";
 import { T, s, Wordmark, Ambient, ProgressBar } from "./theme";
 
-const STEPS = ["categories", "services", "extras", "datetime", "master", "contacts", "success"];
+const STEPS = ["categories", "services", "extras", "datetime", "master", "contacts", "payment", "success"];
 
 const STEP_META = {
   categories: { num: "01 / 07", title: "Выберите", titleEm: "категорию", hint: "С чего начнём сегодня?" },
@@ -32,10 +33,16 @@ export default function App() {
     contact: null,
     paymentUrl: null,
   });
+  const [confirmationToken, setConfirmationToken] = useState(null);
+  const [bookingId, setBookingId] = useState(null);
 
   const stepIndex = STEPS.indexOf(step);
 
   const next = (data) => {
+    if (data._confirmationToken) {
+      setConfirmationToken(data._confirmationToken);
+      setBookingId(data._bookingId);
+    }
     setBooking((prev) => ({ ...prev, ...data }));
     setStep(STEPS[stepIndex + 1]);
   };
@@ -44,7 +51,11 @@ export default function App() {
     if (stepIndex > 0) setStep(STEPS[stepIndex - 1]);
   };
 
-  const meta = STEP_META[step] || STEP_META.categories;
+  const STEP_META_EXTRA = {
+    ...STEP_META,
+    payment: { num: "07 / 07", title: "Оплата", titleEm: "бронирования", hint: "Безопасная оплата" },
+  };
+  const meta = STEP_META_EXTRA[step] || STEP_META.categories;
   const props = { booking, next, back };
   const isSuccess = step === "success";
 
@@ -162,6 +173,7 @@ export default function App() {
             {step === "datetime"   && <DateTime    {...props} />}
             {step === "master"     && <Master      {...props} />}
             {step === "contacts"   && <Contacts    {...props} />}
+            {step === "payment"    && <Payment bookingId={bookingId} confirmationToken={confirmationToken} booking={booking} onSuccess={() => setStep("success")} />}
             {step === "success"    && <Success      {...props} />}
           </div>
         </div>

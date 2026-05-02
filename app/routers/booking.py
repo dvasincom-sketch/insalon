@@ -21,79 +21,43 @@ async def get_services(category_id: int):
     return result.data
 
 from datetime import datetime, timedelta
+from app.yclients import get_book_times
 
 @router.get("/slots")
-async def get_slots(date: str, duration: int):
-    """Свободные слоты на дату с учётом длительности"""
-    # Получаем все записи на эту дату
-    result = supabase.table("records").select(
-        "date, duration, staff_name"
-    ).eq("company_id", COMPANY_ID).gte(
-        "date", f"{date} 00:00:00"
-    ).lte(
-        "date", f"{date} 23:59:59"
-    ).neq("attendance", -1).execute()
+async def get_slots(date: str, duration: int, service_id: int = 0):
+    """Свободные слоты из YCLIENTS в реальном времени"""
+    salon = supabase.table("salons").select("user_token").eq("company_id", COMPANY_ID).execute().data[0]
+    user_token = salon["user_token"]
 
-    booked = result.data
-
-    # Рабочие часы: 10:00 - 21:00, слоты по 30 минут
-    slots = []
-    start = datetime.strptime(f"{date} 10:00", "%Y-%m-%d %H:%M")
-    end = datetime.strptime(f"{date} 21:00", "%Y-%m-%d %H:%M")
-    now = datetime.now()
-
-    current = start
-    while current + timedelta(seconds=duration) <= end:
-        slot_end = current + timedelta(seconds=duration)
-
-        # Проверяем пересечение с существующими записями
-        is_free = True
-        for b in booked:
-            b_start = datetime.fromisoformat(b["date"])
-            b_end = b_start + timedelta(seconds=b.get("duration", 3600))
-            if not (slot_end <= b_start or current >= b_end):
-                is_free = False
-                break
-
-        if is_free and current > now:
-            slots.append(current.strftime("%H:%M"))
-
-        current += timedelta(minutes=30)
-
+    data = await get_book_times(COMPANY_ID, user_token, date, service_id)
+    times = data.get("data", [])
+    slots = [t["time"] for t in times]
     return {"date": date, "slots": slots}
 
 @router.get("/staff")
-async def get_available_staff(datetime: str, duration: int):
-    """Мастера доступные в выбранный слот"""
-    from datetime import datetime as dt, timedelta
-
-    slot_start = dt.fromisoformat(datetime)
-    slot_end = slot_start + timedelta(seconds=duration)
+async def get_available_staff(datetime: str, duration: int, service_id: int = 0):
+    """Мастера доступные в выбранный слот — проверка через YCLIENTS"""
     date = datetime.split(" ")[0]
+    time = datetime.split(" ")[1] if " " in datetime else "00:00"
 
     # Только активные мастера
-    all_staff = supabase.table("staff").select("id, name, specialization, avatar, rating").eq(
+    all_staff = supabase.table("staff").select(
+        "id, name, specialization, avatar, rating"
+    ).eq("company_id", COMPANY_ID).eq("is_active", True).execute().data
+
+    salon = supabase.table("salons").select("user_token").eq(
         "company_id", COMPANY_ID
-    ).eq("is_active", True).execute().data
+    ).execute().data[0]
+    user_token = salon["user_token"]
 
-    # Занятые записи в этот день
-    booked = supabase.table("records").select(
-        "staff_name, date, duration"
-    ).eq("company_id", COMPANY_ID).gte(
-        "date", f"{date} 00:00:00"
-    ).lte(
-        "date", f"{date} 23:59:59"
-    ).neq("attendance", -1).execute().data
+    # Проверяем каждого мастера через YCLIENTS book_times
+    available = []
+    for staff in all_staff:
+        data = await get_book_times(COMPANY_ID, user_token, date, service_id, staff["id"])
+        times = [t["time"] for t in data.get("data", [])]
+        if time in times:
+            available.append(staff)
 
-    # Находим занятых мастеров в этот слот
-    busy_staff = set()
-    for b in booked:
-        b_start = dt.fromisoformat(b["date"])
-        b_end = b_start + timedelta(seconds=b.get("duration", 3600))
-        if not (slot_end <= b_start or slot_start >= b_end):
-            busy_staff.add(b["staff_name"])
-
-    available = [s for s in all_staff if s["name"] not in busy_staff]
     return available
 
 from fastapi import Body
@@ -191,38 +155,20 @@ async def create_booking(data: dict = Body(...)):
     return {"booking_id": booking_id, "payment_url": payment_url}
 
 @router.get("/nearest_slot")
-async def get_nearest_slot(duration: int):
-    """Ближайший свободный слот на ближайшие 30 дней"""
+async def get_nearest_slot(duration: int, service_id: int = 0):
+    """Ближайший свободный слот из YCLIENTS"""
     from datetime import datetime, timedelta
 
+    salon = supabase.table("salons").select("user_token").eq("company_id", COMPANY_ID).execute().data[0]
+    user_token = salon["user_token"]
+
     now = datetime.now()
-    for i in range(1, 31):
+    for i in range(0, 31):
         date = (now + timedelta(days=i)).strftime("%Y-%m-%d")
-        result = supabase.table("records").select(
-            "date, duration"
-        ).eq("company_id", COMPANY_ID).gte(
-            "date", f"{date} 00:00:00"
-        ).lte(
-            "date", f"{date} 23:59:59"
-        ).neq("attendance", -1).execute()
-
-        booked = result.data
-        start = datetime.strptime(f"{date} 10:00", "%Y-%m-%d %H:%M")
-        end = datetime.strptime(f"{date} 21:00", "%Y-%m-%d %H:%M")
-        current = start
-
-        while current + timedelta(seconds=duration) <= end:
-            slot_end = current + timedelta(seconds=duration)
-            is_free = True
-            for b in booked:
-                b_start = datetime.fromisoformat(b["date"])
-                b_end = b_start + timedelta(seconds=b.get("duration", 3600))
-                if not (slot_end <= b_start or current >= b_end):
-                    is_free = False
-                    break
-            if is_free:
-                return {"date": date, "time": current.strftime("%H:%M")}
-            current += timedelta(minutes=30)
+        data = await get_book_times(COMPANY_ID, user_token, date, service_id)
+        times = data.get("data", [])
+        if times:
+            return {"date": date, "time": times[0]["time"]}
 
     return {"date": None, "time": None}
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getServices } from "../api/booking";
+import { T, s, LoadingScreen, BackBtn, NextBtn } from "../theme";
 
 const EXTRAS_CATEGORY_ID = 19468211;
 
@@ -28,49 +29,91 @@ export default function Extras({ booking, next, back }) {
     );
   };
 
-  const totalDuration = booking.service.seance_length + selected.reduce((s, e) => s + e.seance_length, 0);
-  const totalPrice = booking.service.price_min + selected.reduce((s, e) => s + e.price_min, 0);
+  const totalDuration = booking.service.seance_length + selected.reduce((acc, e) => acc + e.seance_length, 0);
+  const totalPrice = booking.service.price_min + selected.reduce((acc, e) => acc + e.price_min, 0);
 
-  if (loading) return <p>Загрузка...</p>;
+  if (loading) return <LoadingScreen />;
 
   return (
-    <div>
-      <button onClick={back} style={{ marginBottom: 16 }}>← Назад</button>
-      <h2>Дополнительные услуги</h2>
-      <p style={{ color: "#555" }}>Можно пропустить</p>
+    <div style={{ paddingBottom: 100 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+        {extras.map((e) => {
+          const isSel = !!selected.find((s) => s.id === e.id);
+          return (
+            <div
+              key={e.id}
+              onClick={() => toggle(e)}
+              className="extra-row"
+              style={{
+                ...s.row,
+                ...(isSel ? s.rowPicked : {}),
+              }}
+            >
+              {isSel && (
+                <div style={{
+                  position: "absolute", left: 0, top: 0,
+                  width: 3, height: "100%",
+                  background: `linear-gradient(to bottom, ${T.goldDim}, ${T.gold})`,
+                  borderRadius: "3px 0 0 3px",
+                }} />
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontFamily: T.font, fontSize: 15, fontWeight: 500,
+                  color: isSel ? T.gold : T.text, marginBottom: 3,
+                  transition: "color 0.25s",
+                }}>
+                  {e.title}
+                </div>
+                <div style={{ fontFamily: T.font, fontSize: 12, color: T.textMuted, fontWeight: 300 }}>
+                  +{formatDuration(e.seance_length)}
+                </div>
+              </div>
+              <div style={{ fontFamily: T.font, fontSize: 15, color: T.gold, fontWeight: 400, flexShrink: 0 }}>
+                +{e.price_min.toLocaleString("ru-RU")} ₽
+              </div>
 
-      {extras.map((e) => {
-        const isSelected = selected.find((s) => s.id === e.id);
-        return (
-          <div
-            key={e.id}
-            onClick={() => toggle(e)}
-            style={{
-              border: `2px solid ${isSelected ? "#000" : "#ddd"}`,
-              borderRadius: 8,
-              padding: 16,
-              marginBottom: 12,
-              cursor: "pointer",
-            }}
-          >
-            <strong>{e.title}</strong>
-            <div style={{ marginTop: 8, color: "#555" }}>
-              {formatDuration(e.seance_length)} · +{e.price_min.toLocaleString("ru-RU")} ₽
+              <div className="extra-check" style={{
+                width: 22, height: 22, borderRadius: "50%",
+                border: `1px solid ${isSel ? T.gold : T.border}`,
+                background: isSel ? T.gold : "transparent",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0, transition: "all 0.25s",
+              }}>
+                {isSel && (
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                    <path d="M2 5l2 2.5L8 2.5" stroke="#111110" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </div>
             </div>
-          </div>
-        );
-      })}
-
-      <div style={{ marginTop: 16, padding: 16, background: "#f5f5f5", borderRadius: 8 }}>
-        <strong>Итого: {Math.floor(totalDuration / 60)} мин · {totalPrice.toLocaleString("ru-RU")} ₽</strong>
+          );
+        })}
       </div>
 
-      <button
-        onClick={() => next({ extras: selected, totalDuration, totalPrice })}
-        style={{ marginTop: 16, width: "100%", padding: 16, background: "#000", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 16 }}
-      >
-        Продолжить
-      </button>
+      <div style={{
+        display: "inline-flex", alignItems: "center", gap: 6,
+        background: T.s2, border: `1px solid rgba(200,169,110,0.25)`,
+        borderRadius: 20, padding: "5px 12px 5px 8px",
+        fontFamily: T.font, fontSize: 11, color: T.textMuted,
+        marginBottom: 6,
+      }}>
+        <div style={{ width: 6, height: 6, borderRadius: "50%", background: T.gold, flexShrink: 0 }} />
+        <span>Итого:&nbsp;</span>
+        <span style={{ color: T.gold, fontWeight: 500 }}>
+          {Math.floor(totalDuration / 60)} мин · {totalPrice.toLocaleString("ru-RU")} ₽
+        </span>
+      </div>
+
+      <div style={{ ...s.footer, borderTop: "none" }}>
+        <div style={s.footerInner}>
+          <BackBtn onClick={back} />
+          <NextBtn
+            label={selected.length > 0 ? "Далее" : "Пропустить"}
+            onClick={() => next({ extras: selected, totalDuration, totalPrice })}
+          />
+        </div>
+      </div>
     </div>
   );
 }

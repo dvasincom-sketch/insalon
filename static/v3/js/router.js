@@ -1,13 +1,15 @@
 // ============ ROUTER ============
-let plLoaded    = false;
-let staffLoaded = false;
-let oblLoaded   = false;
+let plLoaded      = false;
+let staffLoaded   = false;
+let oblLoaded     = false;
+let devlogLoaded  = false;
 
 const TITLES = {
   pulse:       'Пульс системы',
   pl:          'P&L отчёт',
   staff:       'Сотрудники',
-  obligations: 'Обязательства'
+  obligations: 'Обязательства',
+  devlog:      'Dev Log'
 };
 
 const STAFF_TABS = ['efficiency', 'schedule', 'payroll', 'checks', 'fot'];
@@ -21,14 +23,16 @@ function _hideAllStaffTabs() {
 
 function showScreen(name, tab) {
   // Скрываем все экраны
-  ['pulse', 'pl', 'staff', 'obligations'].forEach(s => {
-    document.getElementById('screen-' + s).classList.add('d-none');
+  ['pulse', 'pl', 'staff', 'obligations', 'devlog'].forEach(s => {
+    const el = document.getElementById('screen-' + s);
+    if (el) el.classList.add('d-none');
   });
 
   // Всегда скрываем табы staff при смене экрана
   _hideAllStaffTabs();
 
-  document.getElementById('screen-' + name).classList.remove('d-none');
+  const screen = document.getElementById('screen-' + name);
+  if (screen) screen.classList.remove('d-none');
   document.getElementById('page-title').textContent = TITLES[name] || name;
 
   // Активный пункт меню
@@ -37,9 +41,10 @@ function showScreen(name, tab) {
   if (activeLink) activeLink.classList.add('active');
 
   // Lazy-load
-  if (name === 'pl'          && !plLoaded)    { loadPL();          plLoaded    = true; }
-  if (name === 'staff'       && !staffLoaded) { loadStaff();       staffLoaded = true; }
-  if (name === 'obligations' && !oblLoaded)   { loadObligations(); oblLoaded   = true; }
+  if (name === 'pl'          && !plLoaded)     { loadPL();          plLoaded     = true; }
+  if (name === 'staff'       && !staffLoaded)  { loadStaff();       staffLoaded  = true; }
+  if (name === 'obligations' && !oblLoaded)    { loadObligations(); oblLoaded    = true; }
+  if (name === 'devlog'      && !devlogLoaded) { loadDevLog();      devlogLoaded = true; }
 
   // Переключаем таб если передан, иначе показываем первый
   if (name === 'staff') {
@@ -75,7 +80,7 @@ function showStaffTab(tab, el) {
 function routeFromHash() {
   const hash = location.hash.replace('#', '') || 'pulse';
   const [screen, tab] = hash.split('/');
-  const validScreens = ['pulse', 'pl', 'staff', 'obligations'];
+  const validScreens = ['pulse', 'pl', 'staff', 'obligations', 'devlog'];
   const target = validScreens.includes(screen) ? screen : 'pulse';
   showScreen(target, tab || null);
 }

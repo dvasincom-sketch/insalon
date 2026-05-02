@@ -12,13 +12,13 @@ export async function getServices(categoryId) {
   return r.json();
 }
 
-export async function getSlots(serviceIds, duration, date) {
-  const r = await fetch(`${API}/booking/slots?date=${date}&duration=${duration}`);
+export async function getSlots(serviceIds, duration, date, serviceId = 0) {
+  const r = await fetch(`${API}/booking/slots?date=${date}&duration=${duration}&service_id=${serviceId}`);
   return r.json();
 }
 
-export async function getStaff(serviceIds, datetime, duration) {
-  const r = await fetch(`${API}/booking/staff?datetime=${encodeURIComponent(datetime)}&duration=${duration}`);
+export async function getStaff(serviceIds, datetime, duration, serviceId = 0) {
+  const r = await fetch(`${API}/booking/staff?datetime=${encodeURIComponent(datetime)}&duration=${duration}&service_id=${serviceId}`);
   return r.json();
 }
 
@@ -31,8 +31,8 @@ export async function createBooking(data) {
   return r.json();
 }
 
-export async function getNearestSlot(duration) {
-  const r = await fetch(`${API}/booking/nearest_slot?duration=${duration}`);
+export async function getNearestSlot(duration, serviceId = 0) {
+  const r = await fetch(`${API}/booking/nearest_slot?duration=${duration}&service_id=${serviceId}`);
   return r.json();
 }
 

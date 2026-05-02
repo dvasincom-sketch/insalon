@@ -141,3 +141,17 @@ async def find_client_by_phone(company_id: int, user_token: str, phone: str):
     import asyncio
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, find_client_by_phone_sync, company_id, user_token, phone)
+
+def get_book_times_sync(company_id: int, user_token: str, date: str, service_id: int, staff_id: int = 0):
+    with httpx.Client(timeout=30.0, verify=False) as client:
+        response = client.get(
+            f"{BASE_URL}/book_times/{company_id}/{staff_id}/{date}",
+            headers=get_auth_headers(user_token),
+            params={"service_ids[]": service_id}
+        )
+        return response.json()
+
+async def get_book_times(company_id: int, user_token: str, date: str, service_id: int, staff_id: int = 0):
+    import asyncio
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, get_book_times_sync, company_id, user_token, date, service_id, staff_id)

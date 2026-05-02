@@ -28,13 +28,16 @@
     .heat-4 { background: #2f9e44; color: white; }
     .heat-5 { background: #1e7e34; color: white; }
     .countdown-ring { font-size: 3rem; font-weight: 800; line-height: 1; }
+  #screen-obligations, #screen-devlog { max-width: calc(100vw - 240px); }
   
 @media print {
   body * { visibility: hidden; }
   #fot-print-area, #fot-print-area * { visibility: visible; }
   #fot-print-area { position: fixed; left: 0; top: 0; width: 100%; }
+
   .no-print { display: none !important; }
 }
+  
 </style>
 </head>
 <body class="antialiased">
@@ -81,6 +84,14 @@
                 <i class="ti ti-calendar-due"></i>
               </span>
               <span class="nav-link-title">Обязательства</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#devlog" data-screen="devlog">
+              <span class="nav-link-icon d-md-none d-lg-inline-block">
+                <i class="ti ti-code"></i>
+              </span>
+              <span class="nav-link-title">Dev Log</span>
             </a>
           </li>
         </ul>
@@ -463,9 +474,6 @@
           <div class="row row-deck row-cards" id="staff-cards">
           <div class="col-12 text-center text-muted py-4">Загрузка...</div>
         </div>
-      </div>
-    </div>
-
         </div><!-- /staff-tab-efficiency -->
 
         <!-- Таб: Расписание -->
@@ -631,8 +639,9 @@
         </div><!-- /staff-tab-checks -->
 
       </div>
+    </div><!-- /screen-staff -->
 
-        <!-- Screen 4: Обязательства -->
+    <!-- Screen 4: Обязательства -->
     <div class="page-body d-none" id="screen-obligations">
       <div class="container-xl">
         <div class="row row-deck row-cards mb-3">
@@ -684,6 +693,11 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Screen 5: Dev Log -->
+    <div class="page-body d-none" id="screen-devlog">
+      <div class="container-xl" id="screen-devlog-inner"></div>
     </div>
 
   </div>
@@ -745,6 +759,7 @@
 <script src="js/payroll.js"></script>
 <script src="js/checks.js"></script>
 <script src="js/obligations.js"></script>
+<script src="js/devlog.js"></script>
 <script src="js/modal.js"></script>
 <script src="js/fot.js"></script>
 <script src="js/main.js"></script>

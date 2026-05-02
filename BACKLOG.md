@@ -1,6 +1,6 @@
 # BACKLOG — Insalon
 > Единый источник истины. Обновляется после каждой сессии.
-> Последнее обновление: 01.05.2026
+> Последнее обновление: 02.05.2026
 
 ---
 
@@ -66,6 +66,7 @@
 - [ ] Makefile для команд проекта → DEV
 
 ### Frontend
+- [ ] **Dev Log — фикс padding на десктопе 1280px** (первая карточка обрезается сайдбаром) → DEV
 - [ ] Перейти на ES modules (`type="module"`) после стабилизации → DEV
 - [ ] Вынести хардкод имён сотрудников из `STAFF_COLORS` в конфиг или API → DEV
 - [ ] Добавить централизованный error handler в `api.js` → DEV
@@ -75,6 +76,7 @@
 ## ✅ Сделано (архив)
 
 ### Sprint 5 — 2026-05-02
+- [x] **Dev Log экран** — трекер dev-сессий (`dev_sessions` в Supabase, FastAPI роутер, `devlog.js` модуль)
 - [x] Виджет онлайн-записи (React + Vite) в `static/booking/`
 - [x] Категории услуг из БД с фильтрацией служебных
 - [x] Услуги с длительностью и ценой (seance_length из YCLIENTS)
@@ -137,7 +139,20 @@
 
 ## 🔧 Следующая сессия — начать с этого
 
-1. **P0 сначала:** Перевыпустить YCLIENTS Partner Token
-2. Настроить TablePlus → Supabase PostgreSQL
-3. Исправить balance Марии январь
-4. Перейти к историческим данным payroll 2025
+1. Дизайн виджета онлайн-записи — мобильный, современный, с анимацией
+2. Интеграция ЮKassa — реальная оплата предоплаты 2000₽
+3. widget.js для встройки в Tilda через iframe
+4. **P0 бэклог:** Перевыпустить YCLIENTS Partner Token
+
+## 📋 Dev Log — логирование сессий
+
+После каждой сессии логировать в Dev Log через curl:
+
+```bash
+curl -X POST https://insalon.onrender.com/dev-sessions \
+  -H "Content-Type: application/json" \
+  -d '{"date":"YYYY-MM-DD","feature":"Название задачи","category":"dev","duration_min":120,"tokens_approx":50000,"notes":"..."}'
+```
+
+Категории: `dev` / `design` / `analytics`
+Просмотр: https://insalon.onrender.com/dev-sessions/stats

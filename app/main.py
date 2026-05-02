@@ -55,6 +55,9 @@ if os.path.exists("static/v2"):
     app.mount("/v2", StaticFiles(directory="static/v2", html=True), name="static_v2")
 if os.path.exists("static/v3"):
     app.mount("/v3", StaticFiles(directory="static/v3", html=True), name="static_v3")  # АКТУАЛЬНАЯ ВЕРСИЯ
+if os.path.exists("static/booking/dist"):
+    app.mount("/assets", StaticFiles(directory="static/booking/dist/assets"), name="booking_assets")
+    app.mount("/booking", StaticFiles(directory="static/booking/dist", html=True), name="booking")
 
 
 @app.get("/", tags=["Система"])

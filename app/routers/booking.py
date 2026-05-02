@@ -168,8 +168,10 @@ async def create_booking(data: dict = Body(...)):
             "payment_id": payment.id,
             "status": "waiting_payment"
         }).eq("id", booking_id).execute()
-        payment_url = payment.confirmation.confirmation_url
-        confirmation_token = payment.confirmation.confirmation_token if hasattr(payment.confirmation, 'confirmation_token') else None
+        import json as _json
+        conf_data = _json.loads(payment.confirmation.json())
+        payment_url = conf_data.get("confirmation_url", "")
+        confirmation_token = conf_data.get("confirmation_token")
     except Exception as e:
         print(f"[PAYMENT] Ошибка создания платежа: {e}")
         base_url = os.getenv("BOOKING_BASE_URL", "https://insalon.onrender.com")

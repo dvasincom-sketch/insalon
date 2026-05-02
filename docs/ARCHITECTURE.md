@@ -130,3 +130,30 @@ static/booking/          ← React + Vite SPA
 **Таблицы БД:** `bookings`, `leads`, `service_categories`  
 **Стейт флоу:** categories → services → extras → datetime → master → contacts → success  
 **YCLIENTS интеграция:** POST через `run_in_executor` (синхронный httpx внутри async FastAPI)
+
+---
+
+## Оплата (ЮKassa)
+
+**Роутер:** `app/routers/payments.py`  
+**Режим:** тестовый (`test_` ключ), редирект на страницу ЮKassa  
+**Переменные окружения:** `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY`  
+**Флоу:** POST `/booking/create` → создаёт платёж → редирект на ЮKassa → webhook `/payments/webhook` → обновляет `bookings.status`  
+**Webhook события:** `payment.succeeded`, `payment.canceled`  
+**Return URL:** `https://insalon.onrender.com/booking/?booking_id={id}`  
+
+### Переход на боевой режим
+1. Заменить `YOOKASSA_SECRET_KEY` на боевой ключ в Render env vars
+2. В личном кабинете ЮKassa добавить webhook: `https://insalon.onrender.com/payments/webhook`
+3. События: `payment.succeeded`, `payment.canceled`
+
+## YCLIENTS API — использование в виджете
+
+| Эндпоинт | Назначение |
+|---|---|
+| `/book_times/{company_id}/{staff_id}/{date}` | Свободные слоты для услуги |
+| `/clients/{company_id}` POST | Создание клиента |
+| `/records/{company_id}` POST | Создание записи |
+| `staff_id=0` | Любой доступный мастер |
+
+**Важно:** POST запросы к YCLIENTS через `run_in_executor` (синхронный httpx) из-за конфликта anyio event loop.

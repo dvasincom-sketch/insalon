@@ -6,10 +6,10 @@ import DateTime from "./pages/DateTime";
 import Master from "./pages/Master";
 import Contacts from "./pages/Contacts";
 import Success from "./pages/Success";
-import Payment from "./pages/Payment";
+import Confirm from "./pages/Confirm";
 import { T, s, Wordmark, Ambient, ProgressBar } from "./theme";
 
-const STEPS = ["categories", "services", "extras", "datetime", "master", "contacts", "payment", "success"];
+const STEPS = ["categories", "services", "extras", "datetime", "master", "contacts", "confirm", "success"];
 
 const STEP_META = {
   categories: { num: "01 / 07", title: "Выберите", titleEm: "категорию", hint: "С чего начнём сегодня?" },
@@ -22,8 +22,10 @@ const STEP_META = {
 };
 
 export default function App() {
-  const params = new URLSearchParams(window.location.search);
-  const [step, setStep] = useState(params.get("booking_id") ? "success" : "categories");
+  const [step, setStep] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("booking_id") ? "success" : "categories";
+  });
   const [booking, setBooking] = useState({
     category: null,
     service: null,
@@ -33,18 +35,23 @@ export default function App() {
     contact: null,
     paymentUrl: null,
   });
-  const [confirmationToken, setConfirmationToken] = useState(null);
-  const [bookingId, setBookingId] = useState(null);
+  // bookingId и confirmationToken хранятся в booking state
 
   const stepIndex = STEPS.indexOf(step);
 
   const next = (data) => {
-    if (data._confirmationToken) {
-      setConfirmationToken(data._confirmationToken);
-      setBookingId(data._bookingId);
-    }
-    setBooking((prev) => ({ ...prev, ...data }));
-    setStep(STEPS[stepIndex + 1]);
+    const { _confirmationToken, _bookingId, _paymentUrl, ...bookingData } = data;
+    setBooking((prev) => ({
+      ...prev,
+      ...bookingData,
+      ...(_bookingId !== undefined ? { _bookingId } : {}),
+      ...(_paymentUrl !== undefined ? { _paymentUrl } : {}),
+      ...(_confirmationToken !== undefined ? { _confirmationToken } : {}),
+    }));
+    setStep((cur) => {
+      const idx = STEPS.indexOf(cur);
+      return STEPS[idx + 1] || cur;
+    });
   };
 
   const back = () => {
@@ -53,7 +60,7 @@ export default function App() {
 
   const STEP_META_EXTRA = {
     ...STEP_META,
-    payment: { num: "07 / 07", title: "Оплата", titleEm: "бронирования", hint: "Безопасная оплата" },
+    confirm: { num: "07 / 07", title: "Подтвердите", titleEm: "бронирование", hint: "Резерв активен 30 минут" },
   };
   const meta = STEP_META_EXTRA[step] || STEP_META.categories;
   const props = { booking, next, back };
@@ -173,7 +180,7 @@ export default function App() {
             {step === "datetime"   && <DateTime    {...props} />}
             {step === "master"     && <Master      {...props} />}
             {step === "contacts"   && <Contacts    {...props} />}
-            {step === "payment"    && <Payment bookingId={bookingId} confirmationToken={confirmationToken} booking={booking} onSuccess={() => setStep("success")} />}
+            {step === "confirm"   && <Confirm booking={booking} paymentUrl={booking._paymentUrl} bookingId={booking._bookingId} />}
             {step === "success"    && <Success      {...props} />}
           </div>
         </div>

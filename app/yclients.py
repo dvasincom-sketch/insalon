@@ -104,7 +104,7 @@ def create_client_sync(company_id: int, user_token: str, name: str, phone: str, 
         return response.json()
 
 def create_record_sync(company_id: int, user_token: str, data: dict):
-    with httpx.Client(timeout=30.0, verify=False) as client:
+    with httpx.Client(timeout=5.0, verify=False) as client:
         response = client.post(
             f"{BASE_URL}/records/{company_id}",
             headers=get_auth_headers(user_token),

@@ -132,28 +132,33 @@ async def create_booking(data: dict = Body(...)):
 
     supabase.table("leads").insert(lead_row).execute()
 
-    # 4. Создаём запись в YCLIENTS
-    try:
-        record_data = {
-            "staff_id": data.get("master_id"),
-            "services": [{"id": data.get("service_id")}],
-            "client": {"id": yclients_client_id} if yclients_client_id else {
-                "name": data.get("client_name"),
-                "phone": data.get("client_phone"),
-            },
-            "datetime": data.get("datetime").replace(" ", "T"),
-            "seance_length": data.get("duration"),
-            "comment": f"insalon | booking_id={booking_id}",
-        }
-        await create_record(COMPANY_ID, user_token, record_data)
-    except Exception as e:
-        print(f"[BOOKING] Ошибка создания записи в YCLIENTS: {e}")
+    # 4. Создаём запись в YCLIENTS (fire-and-forget, не блокируем ответ)
+    import asyncio
+    record_data = {
+        "staff_id": data.get("master_id"),
+        "services": [{"id": data.get("service_id")}],
+        "client": {"id": yclients_client_id} if yclients_client_id else {
+            "name": data.get("client_name"),
+            "phone": data.get("client_phone"),
+        },
+        "datetime": data.get("datetime").replace(" ", "T"),
+        "seance_length": data.get("duration"),
+        "comment": f"insalon | booking_id={booking_id}",
+    }
+    async def _create_record_bg():
+        try:
+            await create_record(COMPANY_ID, user_token, record_data)
+            print(f"[BOOKING] YCLIENTS запись создана для booking_id={booking_id}")
+        except Exception as e:
+            print(f"[BOOKING] Ошибка создания записи в YCLIENTS: {e}")
+    asyncio.create_task(_create_record_bg())
 
     # 5. Создаём платёж в ЮKassa
     try:
         from app.routers.payments import get_yookassa
         import uuid
         Payment = get_yookassa()
+        base_url = os.getenv("BOOKING_BASE_URL", "https://insalon.onrender.com")
         base_url = os.getenv("BOOKING_BASE_URL", "https://insalon.onrender.com")
         payment = Payment.create({
             "amount": {"value": "2000.00", "currency": "RUB"},

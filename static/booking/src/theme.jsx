@@ -210,6 +210,7 @@ export const s = {
 export function BackBtn({ onClick }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className="btn-back"
       style={{
@@ -236,6 +237,7 @@ export function BackBtn({ onClick }) {
 export function NextBtn({ onClick, disabled, label = "Далее", confirm = false }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
       className={confirm ? "btn-pay" : "btn-next"}

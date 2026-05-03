@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getStaff } from "../api/booking";
 import { T, s, LoadingScreen, BackBtn, NextBtn } from "../theme";
 
@@ -6,8 +6,11 @@ export default function Master({ booking, next, back }) {
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [picked, setPicked] = useState(null);
+  const calledRef = useRef(false);
 
   useEffect(() => {
+    if (calledRef.current) return;
+    calledRef.current = true;
     getStaff([], booking.datetime, booking.totalDuration, booking.service.id).then((data) => {
       setStaff(data);
       setLoading(false);

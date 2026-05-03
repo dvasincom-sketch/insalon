@@ -54,6 +54,7 @@ function FloatInput({ id, label, value, onChange, type = "text", error }) {
         onChange={onChange}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
+        autoComplete="off"
         className="input-field"
         style={{
           ...s.input,
@@ -111,7 +112,11 @@ export default function Contacts({ booking, next, back }) {
         client_email: email,
         extras: booking.extras.map(e => ({ id: e.id, title: e.title })),
       });
-      window.top.location.href = result.payment_url;
+      next({
+        contact: { name, phone, email },
+        _paymentUrl: result.payment_url,
+        _bookingId: result.booking_id,
+      });
     } catch {
       setSubmitting(false);
     }
@@ -174,7 +179,7 @@ export default function Contacts({ booking, next, back }) {
         <div style={s.footerInner}>
           <BackBtn onClick={back} />
           <NextBtn
-            label={submitting ? "Отправка..." : "Перейти к оплате"}
+            label={submitting ? "Создаём запись..." : "Подтвердить запись"}
             confirm
             disabled={submitting}
             onClick={handleSubmit}

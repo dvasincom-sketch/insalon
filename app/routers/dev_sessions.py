@@ -50,3 +50,43 @@ async def get_stats():
     for c in stats["by_category"]:
         stats["by_category"][c]["hours"] = round(stats["by_category"][c]["hours"], 2)
     return stats
+
+
+# ── Backlog ────────────────────────────────────────────────────────────────────
+
+class BacklogItem(BaseModel):
+    feature: str
+    category: str
+    priority: str = 'P1'
+    planned_hours: Optional[float] = 0
+    planned_tokens: Optional[int] = 0
+    planned_date: Optional[date] = None
+    notes: Optional[str] = None
+
+class BacklogUpdate(BaseModel):
+    planned_hours: Optional[float] = None
+    planned_tokens: Optional[int] = None
+    planned_date: Optional[date] = None
+    status: Optional[str] = None
+    notes: Optional[str] = None
+
+@router.get("/backlog")
+async def list_backlog(status: Optional[str] = 'open'):
+    q = get_sb().table("dev_backlog").select("*").order("priority").order("created_at")
+    if status:
+        q = q.eq("status", status)
+    return q.execute().data
+
+@router.post("/backlog")
+async def create_backlog_item(item: BacklogItem):
+    data = item.dict()
+    if data.get("planned_date"):
+        data["planned_date"] = str(data["planned_date"])
+    return get_sb().table("dev_backlog").insert(data).execute().data[0]
+
+@router.patch("/backlog/{item_id}")
+async def update_backlog_item(item_id: int, upd: BacklogUpdate):
+    data = {k: v for k, v in upd.dict().items() if v is not None}
+    if "planned_date" in data:
+        data["planned_date"] = str(data["planned_date"])
+    return get_sb().table("dev_backlog").update(data).eq("id", item_id).execute().data[0]

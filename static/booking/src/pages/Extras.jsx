@@ -29,8 +29,10 @@ export default function Extras({ booking, next, back }) {
     );
   };
 
-  const totalDuration = booking.service.seance_length + selected.reduce((acc, e) => acc + e.seance_length, 0);
-  const totalPrice = booking.service.price_min + selected.reduce((acc, e) => acc + e.price_min, 0);
+  const baseDuration = booking.totalDuration || booking.service.seance_length;
+  const basePrice = booking.totalPrice || booking.service.price_min;
+  const totalDuration = baseDuration + selected.reduce((acc, e) => acc + e.seance_length, 0);
+  const totalPrice = basePrice + selected.reduce((acc, e) => acc + e.price_min, 0);
 
   if (loading) return <LoadingScreen />;
 
@@ -57,20 +59,31 @@ export default function Extras({ booking, next, back }) {
                   borderRadius: "3px 0 0 3px",
                 }} />
               )}
-              <div style={{ flex: 1, minWidth: 0 }}>
+              {/* Название — левый край */}
+              <div style={{
+                flex: 1, minWidth: 0,
+                fontFamily: T.font, fontSize: 15, fontWeight: 500,
+                color: isSel ? T.gold : T.text,
+                lineHeight: 1.35, transition: "color 0.25s",
+                textAlign: "left", wordBreak: "break-word",
+              }}>
+                {e.title}
+              </div>
+
+              {/* Цена сверху, длительность снизу */}
+              <div style={{ textAlign: "right", flexShrink: 0 }}>
                 <div style={{
-                  fontFamily: T.font, fontSize: 15, fontWeight: 500,
-                  color: isSel ? T.gold : T.text, marginBottom: 3,
-                  transition: "color 0.25s",
+                  fontFamily: T.font, fontSize: 15,
+                  color: T.gold, fontWeight: 400, lineHeight: 1.2,
                 }}>
-                  {e.title}
+                  +{e.price_min.toLocaleString("ru-RU")} ₽
                 </div>
-                <div style={{ fontFamily: T.font, fontSize: 12, color: T.textMuted, fontWeight: 300 }}>
+                <div style={{
+                  fontFamily: T.font, fontSize: 11,
+                  color: T.textMuted, fontWeight: 300, marginTop: 3,
+                }}>
                   +{formatDuration(e.seance_length)}
                 </div>
-              </div>
-              <div style={{ fontFamily: T.font, fontSize: 15, color: T.gold, fontWeight: 400, flexShrink: 0 }}>
-                +{e.price_min.toLocaleString("ru-RU")} ₽
               </div>
 
               <div className="extra-check" style={{
@@ -110,7 +123,11 @@ export default function Extras({ booking, next, back }) {
           <BackBtn onClick={back} />
           <NextBtn
             label={selected.length > 0 ? "Далее" : "Пропустить"}
-            onClick={() => next({ extras: selected, totalDuration, totalPrice })}
+            onClick={() => next({
+              extras: [...(booking.extras || []), ...selected],
+              totalDuration,
+              totalPrice,
+            })}
           />
         </div>
       </div>

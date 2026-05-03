@@ -73,6 +73,18 @@
 
 ---
 
+## Design
+- [ ] Services: описание услуг — после добавления `description` в таблицу `services` подключить ServiceDetail.jsx
+- [ ] Services: desktop two-column layout (требует рефакторинга s.phone в App)
+- [ ] App: анимации переходов между шагами — единая система
+- [ ] Success: html2canvas для кнопки «Сохранить как изображение»
+
+## Dev (проверить)
+- [ ] Contacts + Confirm: убедиться что используют booking.totalDuration / booking.totalPrice
+- [ ] getCategories(): проверить наличие поля cat.services_count
+- [ ] getBooking(): убедиться что возвращает master_avatar
+- [ ] DateTime: эндпоинт доступных дней месяца для превентивной пометки пустых дат
+
 ## ✅ Сделано (архив)
 
 ### Sprint 5 — 2026-05-02
@@ -179,3 +191,19 @@ curl -X POST https://insalon.onrender.com/dev-sessions \
 
 ## html2canvas — Сохранить как изображение [P2]
 - Реализовать кнопку на Success экране
+
+## Миграция инфраструктуры в РФ [P2]
+
+### Причина
+152-ФЗ — персональные данные клиентов должны храниться на серверах в РФ
+
+### План миграции
+1. **Бэкенд**: Render → Timeweb Cloud Apps (деплой из GitHub, переменные через UI, SSL автоматом)
+2. **База данных**: Supabase (EU серверы) → Yandex Managed PostgreSQL или Timeweb Managed PostgreSQL
+3. **Домен**: без изменений, переключить DNS на новый IP
+
+### Когда делать
+После запуска MVP и первых платящих клиентов
+
+### Selectel
+Рассмотреть как альтернативу на этапе роста когда нужен больший контроль над инфраструктурой

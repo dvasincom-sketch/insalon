@@ -30,7 +30,7 @@ function arriveTime(dt) {
 }
 
 const D = "1px dashed #2e2e2a";
-const S = "1px solid #222220";
+const S = "1px solid #2a2a26";
 
 function Row({ label, value, valueColor }) {
   return (
@@ -58,7 +58,7 @@ function FieldLabel({ children }) {
     <div style={{
       fontSize: 10, color: "#6a6660", letterSpacing: "0.12em",
       textTransform: "uppercase", fontWeight: 300,
-      fontFamily: "'Outfit',sans-serif", marginBottom: 4,
+      fontFamily: "'Outfit',sans-serif", marginBottom: 3,
     }}>
       {children}
     </div>
@@ -78,7 +78,7 @@ function IconBox({ size = 28, bg = "#222220", border = "1px solid #2a2a26", radi
 
 function QRDecor() {
   return (
-    <svg width="42" height="42" viewBox="0 0 42 42" fill="none">
+    <svg width="34" height="34" viewBox="0 0 42 42" fill="none">
       <rect x="3" y="3" width="13" height="13" rx="2" fill="#252520"/>
       <rect x="6" y="6" width="7" height="7" rx="1" fill="#c8a96e" opacity="0.5"/>
       <rect x="26" y="3" width="13" height="13" rx="2" fill="#252520"/>
@@ -93,6 +93,31 @@ function QRDecor() {
       <rect x="26" y="38" width="4" height="4" rx="1" fill="#333330"/>
       <rect x="38" y="38" width="4" height="4" rx="1" fill="#333330"/>
     </svg>
+  );
+}
+
+// П.16: аватар мастера — фото если есть, иначе инициал
+function MasterAvatar({ name, avatarUrl }) {
+  const initial = name ? name.charAt(0).toUpperCase() : "М";
+  if (avatarUrl) {
+    return (
+      <img src={avatarUrl} alt={name} style={{
+        width: 40, height: 40, borderRadius: "50%",
+        objectFit: "cover", flexShrink: 0,
+        border: "1.5px solid #3a3a36",
+      }} />
+    );
+  }
+  return (
+    <div style={{
+      width: 40, height: 40, borderRadius: "50%",
+      background: "#252520", border: "1.5px solid #3a3a36",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      flexShrink: 0, fontFamily: "'Outfit',sans-serif",
+      fontSize: 15, fontWeight: 400, color: "#c8a96e",
+    }}>
+      {initial}
+    </div>
   );
 }
 
@@ -128,33 +153,27 @@ export default function Success() {
 
   return (
     <div style={{
-      background: T.bg,
-      minHeight: "100dvh",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "stretch",
-      fontFamily: "'Outfit',sans-serif",
-      position: "relative",
+      background: T.bg, minHeight: "100dvh",
+      display: "flex", flexDirection: "column", alignItems: "stretch",
+      fontFamily: "'Outfit',sans-serif", position: "relative",
     }}>
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,300;1,300&family=Outfit:wght@300;400;500&display=swap');
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.45} }
         @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
       `}</style>
+
+      {/* П.14: ambient фон как на всех экранах */}
       <Ambient />
 
       <div style={{
-        width: "100%",
-        maxWidth: 430,
-        margin: "0 auto",
-        background: "#1a1a18",
-        minHeight: "100dvh",
-        display: "flex",
-        flexDirection: "column",
+        width: "100%", maxWidth: 430, margin: "0 auto",
+        minHeight: "100dvh", display: "flex", flexDirection: "column",
         animation: "fadeUp 0.4s cubic-bezier(0.22,1,0.36,1) both",
       }}>
 
-        {/* Шапка */}
-        <div style={{ padding: "18px 22px 16px", borderBottom: S, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        {/* Шапка — вне ваучера */}
+        <div style={{ padding: "18px 22px 12px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <div style={{ fontSize: 10, fontWeight: 300, letterSpacing: "0.22em", color: "#8a6e42", textTransform: "uppercase", marginBottom: 3 }}>
               Insalon · Head Spa
@@ -185,249 +204,231 @@ export default function Success() {
           </div>
         </div>
 
-        {/* Золотой блок даты/времени */}
+        {/* П.15: ваучер — отдельная карточка со скруглёнными углами */}
         {booking && (
-          <div style={{ background: "#c8a96e", padding: "18px 22px 16px", position: "relative", overflow: "hidden" }}>
-            <div style={{
-              position: "absolute", inset: 0, pointerEvents: "none",
-              background: "repeating-linear-gradient(45deg,transparent,transparent 18px,rgba(0,0,0,0.04) 18px,rgba(0,0,0,0.04) 19px)",
-            }} />
-            <div style={{ fontSize: 10, fontWeight: 500, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(17,17,16,0.55)", marginBottom: 6 }}>
-              Дата и время визита
-            </div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
-              <span style={{ fontFamily: "'Playfair Display',serif", fontWeight: 300, fontSize: 24, color: "#111110", lineHeight: 1 }}>
-                {formatDate(booking.datetime)}
-              </span>
-              <span style={{ fontSize: 26, fontWeight: 500, color: "#111110", lineHeight: 1, letterSpacing: "-0.01em" }}>
-                {formatTime(booking.datetime)}
-              </span>
-            </div>
-            <div style={{ fontSize: 11, color: "rgba(17,17,16,0.6)", fontWeight: 300 }}>
-              Просим прийти{" "}
-              <b style={{ fontWeight: 500, color: "rgba(17,17,16,0.85)" }}>в {arriveTime(booking.datetime)}</b>
-              {" "}— мастер будет готов встретить вас
-            </div>
-          </div>
-        )}
+          <div style={{ margin: "0 16px 16px", background: "#1a1a18", borderRadius: 20, border: S, overflow: "hidden" }}>
 
-        {/* Услуга */}
-        {booking && (
-          <div style={{ padding: "16px 22px", borderBottom: D }}>
-            <FieldLabel>Услуга</FieldLabel>
-            <div style={{ fontFamily: "'Playfair Display',serif", fontWeight: 300, fontSize: 19, color: "#f2ede4", lineHeight: 1.2 }}>
-              {booking.service_title}
-            </div>
-            {booking.extras?.length > 0 && booking.extras.map((e, i) => (
-              <div key={i} style={{ fontSize: 12, color: "#6a6660", fontWeight: 300, marginTop: 4 }}>+ {e.title}</div>
-            ))}
-          </div>
-        )}
-
-        {/* Оплата */}
-        {booking && (
-          <div style={{ padding: "14px 22px", borderBottom: D }}>
-            <SecTitle>Оплата</SecTitle>
-            <Row label="Стоимость услуги" value={`${booking.total_price?.toLocaleString("ru-RU")} ₽`} />
-            <Row label="Предоплата (оплачено)" value={`−${PREPAYMENT.toLocaleString("ru-RU")} ₽`} valueColor="#5a9467" />
-            <div style={{ height: "0.5px", background: "#222220", margin: "6px 0" }} />
-            {remaining > 0 && (
+            {/* Золотой блок даты/времени */}
+            <div style={{ background: "#c8a96e", padding: "16px 20px 14px", position: "relative", overflow: "hidden" }}>
               <div style={{
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-                padding: "8px 12px", background: "#1f1c14",
-                border: "1px solid #c8a96e33", borderRadius: 10, marginTop: 4,
+                position: "absolute", inset: 0, pointerEvents: "none",
+                background: "repeating-linear-gradient(45deg,transparent,transparent 18px,rgba(0,0,0,0.04) 18px,rgba(0,0,0,0.04) 19px)",
+              }} />
+              <div style={{ fontSize: 10, fontWeight: 500, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(17,17,16,0.5)", marginBottom: 5 }}>
+                Дата и время визита
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 5, flexWrap: "wrap" }}>
+                <span style={{ fontFamily: "'Playfair Display',serif", fontWeight: 300, fontSize: 21, color: "#111110", lineHeight: 1 }}>
+                  {formatDate(booking.datetime)}
+                </span>
+                <span style={{ fontSize: 24, fontWeight: 500, color: "#111110", lineHeight: 1, letterSpacing: "-0.01em" }}>
+                  {formatTime(booking.datetime)}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: "rgba(17,17,16,0.6)", fontWeight: 300 }}>
+                Просим прийти{" "}
+                <b style={{ fontWeight: 500, color: "rgba(17,17,16,0.85)" }}>в {arriveTime(booking.datetime)}</b>
+                {" "}— мастер готов встретить вас
+              </div>
+            </div>
+
+            {/* Услуга */}
+            <div style={{ padding: "13px 20px", borderBottom: D }}>
+              <FieldLabel>Услуга</FieldLabel>
+              <div style={{ fontFamily: "'Playfair Display',serif", fontWeight: 300, fontSize: 18, color: "#f2ede4", lineHeight: 1.2 }}>
+                {booking.service_title}
+              </div>
+              {booking.extras?.length > 0 && booking.extras.map((e, i) => (
+                <div key={i} style={{ fontSize: 12, color: "#6a6660", fontWeight: 300, marginTop: 3 }}>+ {e.title}</div>
+              ))}
+            </div>
+
+            {/* Оплата */}
+            <div style={{ padding: "12px 20px", borderBottom: D }}>
+              <SecTitle>Оплата</SecTitle>
+              <Row label="Стоимость услуги" value={`${booking.total_price?.toLocaleString("ru-RU")} ₽`} />
+              <Row label="Предоплата (оплачено)" value={`−${PREPAYMENT.toLocaleString("ru-RU")} ₽`} valueColor="#5a9467" />
+              <div style={{ height: "0.5px", background: "#222220", margin: "5px 0" }} />
+              {remaining > 0 && (
+                <div style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "7px 12px", background: "#1f1c14",
+                  border: "1px solid #c8a96e33", borderRadius: 10, marginTop: 4,
+                }}>
+                  <div style={{ fontSize: 12, color: "#c8a96e", fontWeight: 400 }}>Доплатить на месте</div>
+                  <div style={{ fontFamily: "'Playfair Display',serif", fontWeight: 300, fontSize: 20, color: "#c8a96e" }}>
+                    {remaining.toLocaleString("ru-RU")} ₽
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* П.16: Мастер с аватаром + кабинет в одну строку */}
+            <div style={{ padding: "12px 20px", borderBottom: D }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <MasterAvatar name={booking.master_name} avatarUrl={booking.master_avatar} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <FieldLabel>Мастер</FieldLabel>
+                  <div style={{ fontSize: 14, color: "#e8e0d4", fontWeight: 500 }}>
+                    {booking.master_name || "Любой свободный"}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <FieldLabel>Кабинет</FieldLabel>
+                  <div style={{ fontSize: 14, color: "#e8e0d4", fontWeight: 400 }}>{SALON_FLOOR}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* П.17: Как устроено время — левое выравнивание, компактная плашка */}
+            <div style={{ padding: "12px 20px", borderBottom: D }}>
+              <SecTitle>Как устроено ваше время</SecTitle>
+              {[
+                {
+                  icon: <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="2" y="4" width="9" height="7" rx="1.5" stroke="#c8a96e" strokeWidth="1"/><path d="M5 4V3a2 2 0 0 1 3 0v1" stroke="#c8a96e" strokeWidth="1" strokeLinecap="round"/></svg>,
+                  label: "Время на кушетке",
+                  time: `${durationMin} мин`,
+                },
+                {
+                  icon: <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2.5 5c0-1 .9-2 2-2h4a2 2 0 0 1 2 2v1h-8V5z" stroke="#c8a96e" strokeWidth="1"/><path d="M1.5 6h10l-.8 4.5H2.3L1.5 6z" stroke="#c8a96e" strokeWidth="1" strokeLinejoin="round"/></svg>,
+                  label: "Чаепитие и сушка волос",
+                  time: `${TEA_TIME_MIN} мин`,
+                },
+              ].map((item, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 7 }}>
+                  <IconBox>{item.icon}</IconBox>
+                  <div style={{ fontSize: 13, color: "#c0bcb6", flex: 1, fontFamily: "'Outfit',sans-serif", fontWeight: 300, textAlign: "left" }}>
+                    {item.label}
+                  </div>
+                  <div style={{ fontSize: 13, color: "#e8e0d4", fontWeight: 500, fontFamily: "'Outfit',sans-serif" }}>
+                    {item.time}
+                  </div>
+                </div>
+              ))}
+
+              {/* Переодевание — компактная плашка, всё в одну строку */}
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "7px 10px", background: "#1c1e1a",
+                border: "1px solid #2e3628", borderRadius: 10, marginTop: 2,
               }}>
-                <div style={{ fontSize: 12, color: "#c8a96e", fontWeight: 400 }}>Доплатить на месте</div>
-                <div style={{ fontFamily: "'Playfair Display',serif", fontWeight: 300, fontSize: 20, color: "#c8a96e" }}>
-                  {remaining.toLocaleString("ru-RU")} ₽
+                <IconBox bg="#1a2214" border="1px solid #3d5030">
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                    <circle cx="6.5" cy="6.5" r="4.5" stroke="#5a9467" strokeWidth="1"/>
+                    <path d="M4.5 6.5l1.5 1.5 2.5-2.5" stroke="#5a9467" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </IconBox>
+                <div style={{ fontSize: 12, color: "#8aaa78", fontWeight: 300, fontFamily: "'Outfit',sans-serif", flex: 1, textAlign: "left" }}>
+                  Переодевание и анкета — не входит в оплачиваемое время
                 </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Мастер / Кабинет */}
-        {booking && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", padding: "14px 22px", borderBottom: D }}>
-            <div style={{ paddingRight: 16 }}>
-              <FieldLabel>Мастер</FieldLabel>
-              <div style={{ fontSize: 14, color: "#e8e0d4", fontWeight: 500, lineHeight: 1.35 }}>
-                {booking.master_name || "Любой свободный"}
+                <div style={{
+                  fontSize: 11, color: "#5a9467", fontWeight: 500,
+                  background: "#1a2e1e", border: "1px solid #3d6b4a55",
+                  borderRadius: 10, padding: "2px 8px", flexShrink: 0,
+                  fontFamily: "'Outfit',sans-serif",
+                }}>
+                  +{DRESS_TIME_MIN} мин
+                </div>
               </div>
             </div>
-            <div style={{ paddingLeft: 16, borderLeft: "0.5px solid #222220" }}>
-              <FieldLabel>Кабинет</FieldLabel>
-              <div style={{ fontSize: 14, color: "#e8e0d4", fontWeight: 400, lineHeight: 1.35 }}>
-                {SALON_FLOOR}
-              </div>
-            </div>
-          </div>
-        )}
 
-        {/* Как устроено время */}
-        {booking && (
-          <div style={{ padding: "14px 22px", borderBottom: D }}>
-            <SecTitle>Как устроено ваше время</SecTitle>
-            {[
-              {
-                icon: <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="2" y="4" width="9" height="7" rx="1.5" stroke="#c8a96e" strokeWidth="1"/><path d="M5 4V3a2 2 0 0 1 3 0v1" stroke="#c8a96e" strokeWidth="1" strokeLinecap="round"/></svg>,
-                label: "Время на кушетке",
-                time: `${durationMin} мин`,
-              },
-              {
-                icon: <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2.5 5c0-1 .9-2 2-2h4a2 2 0 0 1 2 2v1h-8V5z" stroke="#c8a96e" strokeWidth="1"/><path d="M1.5 6h10l-.8 4.5H2.3L1.5 6z" stroke="#c8a96e" strokeWidth="1" strokeLinejoin="round"/></svg>,
-                label: "Чаепитие и сушка волос",
-                time: `${TEA_TIME_MIN} мин`,
-              },
-            ].map((item, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                <IconBox>{item.icon}</IconBox>
-                <div style={{ fontSize: 13, color: "#c0bcb6", flex: 1, fontFamily: "'Outfit',sans-serif", fontWeight: 300 }}>
-                  {item.label}
+            {/* П.18: Адрес — без заголовка, левое выравнивание */}
+            <div style={{ padding: "12px 20px", borderBottom: D }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
+                <div style={{
+                  width: 30, height: 30, borderRadius: "50%",
+                  background: "#1f1f1c", border: "1px solid #2a2a26",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0, marginTop: 1,
+                }}>
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                    <path d="M6.5 1C4.3 1 2.5 2.8 2.5 5c0 3 4 7 4 7s4-4 4-7c0-2.2-1.8-4-4-4z" stroke="#8a8480" strokeWidth="1" strokeLinejoin="round"/>
+                    <circle cx="6.5" cy="5" r="1.2" stroke="#8a8480" strokeWidth="1"/>
+                  </svg>
                 </div>
-                <div style={{ fontSize: 14, color: "#e8e0d4", fontWeight: 500, fontFamily: "'Outfit',sans-serif" }}>
-                  {item.time}
+                <div>
+                  <div style={{ fontSize: 13, color: "#e8e0d4", lineHeight: 1.45 }}>{SALON_ADDRESS}</div>
+                  <div style={{ fontSize: 11, color: "#8a8480", fontWeight: 300, marginTop: 2 }}>{SALON_METRO}</div>
                 </div>
               </div>
-            ))}
-
-            {/* Переодевание — плашка */}
-            <div style={{
-              display: "flex", alignItems: "center", gap: 10,
-              padding: "8px 10px", background: "#1c1e1a",
-              border: "1px solid #2e3628", borderRadius: 10, marginTop: 2,
-            }}>
-              <IconBox bg="#1a2214" border="1px solid #3d5030">
+              <button
+                type="button"
+                onClick={() => window.open(`https://yandex.ru/maps/?text=${encodeURIComponent(SALON_ADDRESS)}`, "_blank")}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+                  width: "100%", height: 38, borderRadius: 19,
+                  border: "1px solid #2e2e2a", background: "transparent",
+                  color: "#8a8480", fontSize: 12, fontWeight: 300,
+                  cursor: "pointer", fontFamily: "'Outfit',sans-serif", transition: "all 0.2s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = "#3e3e38"; e.currentTarget.style.color = "#c0bcb6"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = "#2e2e2a"; e.currentTarget.style.color = "#8a8480"; }}
+              >
                 <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-                  <circle cx="6.5" cy="6.5" r="4.5" stroke="#5a9467" strokeWidth="1"/>
-                  <path d="M4.5 6.5l1.5 1.5 2.5-2.5" stroke="#5a9467" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M2 6.5h9M8 3.5l3 3-3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-              </IconBox>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12, color: "#8aaa78", fontWeight: 400, fontFamily: "'Outfit',sans-serif" }}>
-                  Переодевание и анкета
+                Построить маршрут в Яндекс Картах
+              </button>
+            </div>
+
+            {/* П.19: QR + permalink — одна строка с вертикальным разделителем */}
+            <div style={{ padding: "12px 20px", display: "flex", alignItems: "center" }}>
+              {/* QR слева */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+                <div style={{
+                  width: 46, height: 46, flexShrink: 0,
+                  background: "#1f1f1c", borderRadius: 8, border: "1px solid #2a2a26",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <QRDecor />
                 </div>
-                <div style={{ fontSize: 11, color: "#5a7a52", fontWeight: 300, fontFamily: "'Outfit',sans-serif", marginTop: 1 }}>
-                  Включено — не входит в оплачиваемое время
+                <div>
+                  <div style={{ fontSize: 12, color: "#e8e0d4", fontWeight: 400, marginBottom: 1 }}>
+                    Всё в порядке
+                  </div>
+                  <div style={{ fontSize: 10, color: "#6a6660", fontWeight: 300 }}>
+                    Вас ждут
+                  </div>
                 </div>
               </div>
-              <div style={{
-                fontSize: 11, color: "#5a9467", fontWeight: 500,
-                background: "#1a2e1e", border: "1px solid #3d6b4a55",
-                borderRadius: 10, padding: "2px 8px", flexShrink: 0,
-                fontFamily: "'Outfit',sans-serif",
-              }}>
-                +{DRESS_TIME_MIN} мин
+
+              {/* Вертикальный разделитель */}
+              <div style={{ width: "0.5px", background: "#2a2a26", alignSelf: "stretch", margin: "0 14px" }} />
+
+              {/* Permalink справа */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, color: "#c0bcb6", fontWeight: 400, marginBottom: 3 }}>
+                  Ваш талон здесь
+                </div>
+                <div style={{
+                  fontSize: 10, color: "#5a5a56", fontWeight: 300,
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  letterSpacing: "0.03em", marginBottom: 6,
+                }}>
+                  headspa.beauty/booking/{bookingId}
+                </div>
+                <button
+                  type="button"
+                  onClick={copyLink}
+                  style={{
+                    fontSize: 10, color: copied ? "#5a9467" : "#c8a96e", fontWeight: 400,
+                    background: "transparent",
+                    border: `1px solid ${copied ? "#3d6b4a55" : "#c8a96e44"}`,
+                    borderRadius: 10, padding: "3px 9px",
+                    cursor: "pointer", fontFamily: "'Outfit',sans-serif",
+                    transition: "all 0.2s", whiteSpace: "nowrap",
+                  }}
+                >
+                  {copied ? "✓ скопировано" : "копировать"}
+                </button>
               </div>
             </div>
+
           </div>
         )}
 
-        {/* Адрес */}
-        <div style={{ padding: "14px 22px", borderBottom: D }}>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
-            <div style={{
-              width: 30, height: 30, borderRadius: "50%",
-              background: "#1f1f1c", border: "1px solid #2a2a26",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0, marginTop: 2,
-            }}>
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-                <path d="M6.5 1C4.3 1 2.5 2.8 2.5 5c0 3 4 7 4 7s4-4 4-7c0-2.2-1.8-4-4-4z" stroke="#8a8480" strokeWidth="1" strokeLinejoin="round"/>
-                <circle cx="6.5" cy="5" r="1.2" stroke="#8a8480" strokeWidth="1"/>
-              </svg>
-            </div>
-            <div>
-              <FieldLabel>Адрес</FieldLabel>
-              <div style={{ fontSize: 13, color: "#e8e0d4", lineHeight: 1.45 }}>{SALON_ADDRESS}</div>
-              <div style={{ fontSize: 11, color: "#8a8480", fontWeight: 300, marginTop: 2 }}>{SALON_METRO}</div>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => window.open(`https://yandex.ru/maps/?text=${encodeURIComponent(SALON_ADDRESS)}`, "_blank")}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-              width: "100%", height: 40, borderRadius: 20,
-              border: "1px solid #2e2e2a", background: "transparent",
-              color: "#8a8480", fontSize: 12, fontWeight: 300,
-              cursor: "pointer", fontFamily: "'Outfit',sans-serif", transition: "all 0.2s",
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = "#3e3e38"; e.currentTarget.style.color = "#c0bcb6"; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = "#2e2e2a"; e.currentTarget.style.color = "#8a8480"; }}
-          >
-            <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-              <path d="M2 6.5h9M8 3.5l3 3-3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            Построить маршрут в Яндекс Картах
-          </button>
-        </div>
-
-        {/* QR */}
-        <div style={{ padding: "14px 22px", borderBottom: S, display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{
-            width: 60, height: 60, flexShrink: 0,
-            background: "#1f1f1c", borderRadius: 10, border: "1px solid #2a2a26",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <QRDecor />
-          </div>
-          <div>
-            <div style={{ fontSize: 13, color: "#e8e0d4", fontWeight: 400, marginBottom: 4 }}>
-              Всё в порядке — вас ждут
-            </div>
-            <div style={{ fontSize: 11, color: "#6a6660", fontWeight: 300, lineHeight: 1.5 }}>
-              QR покажите только если<br />администратор попросит
-            </div>
-          </div>
-        </div>
-
-        {/* Permalink */}
-        <div style={{
-          padding: "12px 22px", borderBottom: D,
-          display: "flex", alignItems: "center", gap: 10,
-          background: "#161614",
-        }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: 8,
-            background: "#1e1e1c", border: "1px solid #2a2a26",
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          }}>
-            <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-              <path d="M5.5 4H3a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V7.5" stroke="#6a6660" strokeWidth="1" strokeLinecap="round"/>
-              <path d="M7.5 2H11v3.5M11 2 6.5 6.5" stroke="#c8a96e" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, color: "#c0bcb6", fontWeight: 400, marginBottom: 2 }}>
-              Ваш талон всегда здесь
-            </div>
-            <div style={{
-              fontSize: 10, color: "#5a5a56", fontWeight: 300,
-              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-              letterSpacing: "0.04em",
-            }}>
-              headspa.beauty/booking/{bookingId}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={copyLink}
-            style={{
-              fontSize: 11, color: copied ? "#5a9467" : "#c8a96e", fontWeight: 400,
-              background: "transparent",
-              border: `1px solid ${copied ? "#3d6b4a55" : "#c8a96e44"}`,
-              borderRadius: 12, padding: "3px 10px",
-              cursor: "pointer", fontFamily: "'Outfit',sans-serif",
-              transition: "all 0.2s", whiteSpace: "nowrap",
-            }}
-          >
-            {copied ? "✓ скопировано" : "копировать"}
-          </button>
-        </div>
-
-        {/* Условия */}
-        <div style={{ padding: "12px 22px", background: "#161614", borderBottom: S }}>
+        {/* Условия — вне ваучера */}
+        <div style={{ padding: "4px 22px 10px" }}>
           <SecTitle>Условия визита</SecTitle>
           {[
             ["за 10 минут", "Приходите за 10 минут — мастер готовится к процедуре заранее"],
@@ -441,9 +442,7 @@ export default function Success() {
                 {text.split(bold).map((part, j, arr) => (
                   <span key={j}>
                     {part}
-                    {j < arr.length - 1 && (
-                      <b style={{ color: "#9a9490", fontWeight: 400 }}>{bold}</b>
-                    )}
+                    {j < arr.length - 1 && <b style={{ color: "#9a9490", fontWeight: 400 }}>{bold}</b>}
                   </span>
                 ))}
               </div>
@@ -452,24 +451,13 @@ export default function Success() {
         </div>
 
         {/* Перенос / Отмена */}
-        <div style={{ padding: "14px 22px", borderBottom: S, display: "flex", gap: 8 }}>
+        <div style={{ padding: "10px 22px", display: "flex", gap: 8 }}>
           {[
-            {
-              label: "Перенести запись",
-              icon: <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 6a5 5 0 1 0 5-5" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/><path d="M1 2v4h4" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/></svg>,
-              text: "Хочу перенести запись",
-              danger: false,
-            },
-            {
-              label: "Отменить запись",
-              icon: <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 9.5l-.5-5M7.5 9.5l.5-5" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/><rect x="2.5" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1"/></svg>,
-              text: "Хочу отменить запись",
-              danger: true,
-            },
+            { label: "Перенести запись", icon: <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 6a5 5 0 1 0 5-5" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/><path d="M1 2v4h4" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/></svg>, text: "Хочу перенести запись", danger: false },
+            { label: "Отменить запись", icon: <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 3h8M5 3V2h2v1M4.5 9.5l-.5-5M7.5 9.5l.5-5" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/><rect x="2.5" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1"/></svg>, text: "Хочу отменить запись", danger: true },
           ].map((btn, i) => (
             <button
-              key={i}
-              type="button"
+              key={i} type="button"
               onClick={() => window.open(`https://wa.me/${WHATSAPP_NUM}?text=${encodeURIComponent(`${btn.text} №${bookingId}`)}`, "_blank")}
               style={{
                 flex: 1, height: 40, borderRadius: 20,
@@ -479,14 +467,8 @@ export default function Success() {
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                 transition: "all 0.2s",
               }}
-              onMouseEnter={e => {
-                e.currentTarget.style.borderColor = btn.danger ? "#6a302e" : "#3e3e38";
-                e.currentTarget.style.color = btn.danger ? "#aa6060" : "#c0bcb6";
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.borderColor = "#2a2a26";
-                e.currentTarget.style.color = "#8a8480";
-              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = btn.danger ? "#6a302e" : "#3e3e38"; e.currentTarget.style.color = btn.danger ? "#aa6060" : "#c0bcb6"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = "#2a2a26"; e.currentTarget.style.color = "#8a8480"; }}
             >
               {btn.icon} {btn.label}
             </button>
@@ -494,33 +476,22 @@ export default function Success() {
         </div>
 
         {/* Публичная оферта */}
-        <div style={{ padding: "10px 22px", borderBottom: S, textAlign: "center" }}>
-          <a
-            href={OFERTA_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              fontSize: 11, color: "#4a4a46", fontWeight: 300,
-              textDecoration: "underline", textUnderlineOffset: 2,
-              textDecorationColor: "#3a3a36",
-            }}
-          >
+        <div style={{ padding: "4px 22px 10px", textAlign: "center" }}>
+          <a href={OFERTA_URL} target="_blank" rel="noopener noreferrer"
+            style={{ fontSize: 11, color: "#4a4a46", fontWeight: 300, textDecoration: "underline", textUnderlineOffset: 2, textDecorationColor: "#3a3a36" }}>
             Публичная оферта и условия бронирования
           </a>
         </div>
 
         {/* Футер */}
-        <div style={{ padding: "16px 22px 32px", display: "flex", flexDirection: "column", gap: 9 }}>
+        <div style={{ padding: "8px 22px 32px", display: "flex", flexDirection: "column", gap: 9 }}>
           <button
             type="button"
             onClick={() => { window.top.location.href = "https://headspa.beauty"; }}
             style={{
-              width: "100%", height: 50, borderRadius: 25,
-              background: "#c8a96e", border: "none", color: "#111110",
-              fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 500,
-              letterSpacing: "0.04em", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-              transition: "background 0.22s",
+              width: "100%", height: 50, borderRadius: 25, background: "#c8a96e", border: "none", color: "#111110",
+              fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 500, letterSpacing: "0.04em",
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, transition: "background 0.22s",
             }}
             onMouseEnter={e => e.currentTarget.style.background = "#d4b47a"}
             onMouseLeave={e => e.currentTarget.style.background = "#c8a96e"}
@@ -531,15 +502,11 @@ export default function Success() {
             </svg>
           </button>
           <button
-            type="button"
-            onClick={() => {}}
+            type="button" onClick={() => {}}
             style={{
-              width: "100%", height: 46, borderRadius: 23,
-              background: "transparent", border: "1px solid #2a2a26",
-              color: "#7a7a76", fontFamily: "'Outfit',sans-serif",
-              fontSize: 13, fontWeight: 300, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              transition: "all 0.22s",
+              width: "100%", height: 46, borderRadius: 23, background: "transparent", border: "1px solid #2a2a26",
+              color: "#7a7a76", fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 300, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all 0.22s",
             }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = "#3e3e38"; e.currentTarget.style.color = "#c0bcb6"; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = "#2a2a26"; e.currentTarget.style.color = "#7a7a76"; }}

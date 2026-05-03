@@ -7,18 +7,18 @@ import Master from "./pages/Master";
 import Contacts from "./pages/Contacts";
 import Success from "./pages/Success";
 import Confirm from "./pages/Confirm";
-import { T, s, Wordmark, Ambient, ProgressBar } from "./theme";
+import { T, s, Wordmark, Ambient, BottomFade, ProgressBar } from "./theme";
 
 const STEPS = ["categories", "services", "extras", "datetime", "master", "contacts", "confirm", "success"];
 
 const STEP_META = {
-  categories: { num: "01 / 07", title: "Выберите", titleEm: "категорию", hint: "С чего начнём сегодня?" },
+  categories: { num: "01 / 07", title: "Выберите", titleEm: "категорию", hint: "Нажмите на категорию для выбора" },
   services:   { num: "02 / 07", title: "Выберите", titleEm: "услугу",    hint: "Выбрана категория" },
   extras:     { num: "03 / 07", title: "Добавьте", titleEm: "допы",      hint: "Можно пропустить" },
   datetime:   { num: "04 / 07", title: "Дата",     titleEm: "& время",   hint: "Выберите удобное время" },
   master:     { num: "05 / 07", title: "Ваш",      titleEm: "мастер",    hint: "Кто проведёт процедуру" },
   contacts:   { num: "06 / 07", title: "Ваши",     titleEm: "контакты",  hint: "Почти готово — последний шаг" },
-  success:    { num: "07 / 07", title: "Всё",       titleEm: "готово!",   hint: "Запись подтверждена" },
+  success:    { num: "07 / 07", title: "Всё",      titleEm: "готово!",   hint: "Запись подтверждена" },
 };
 
 export default function App() {
@@ -35,7 +35,6 @@ export default function App() {
     contact: null,
     paymentUrl: null,
   });
-  // bookingId и confirmationToken хранятся в booking state
 
   const stepIndex = STEPS.indexOf(step);
 
@@ -148,6 +147,7 @@ export default function App() {
 
       <div style={s.phone}>
         <Ambient />
+        <BottomFade />
 
         {!isSuccess && (
           <div style={s.header}>

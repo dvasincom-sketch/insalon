@@ -302,10 +302,27 @@ export function Ambient() {
       left: "50%",
       transform: "translateX(-50%)",
       width: 280,
-      height: 220,
-      background: "radial-gradient(ellipse, rgba(200,169,110,0.055) 0%, transparent 70%)",
+      height: 260,
+      background: "radial-gradient(ellipse, rgba(200,169,110,0.13) 0%, rgba(200,169,110,0.04) 45%, transparent 70%)",
       pointerEvents: "none",
       zIndex: 0,
+    }} />
+  );
+}
+
+export function BottomFade() {
+  return (
+    <div style={{
+      position: "fixed",
+      bottom: 0,
+      left: "50%",
+      transform: "translateX(-50%)",
+      width: "100%",
+      maxWidth: 430,
+      height: "12.5vh",
+      background: "linear-gradient(to top, rgba(17,17,16,0.92) 0%, rgba(17,17,16,0.5) 50%, transparent 100%)",
+      pointerEvents: "none",
+      zIndex: 10,
     }} />
   );
 }

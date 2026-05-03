@@ -132,7 +132,6 @@ export default function Contacts({ booking, next, back }) {
           <div key={item.label} style={{
             display: "flex", justifyContent: "space-between", alignItems: "center",
             padding: "8px 0",
-            borderBottom: i < summary.length - 1 ? `1px solid ${T.border}` : "none",
           }}>
             <span style={{ fontFamily: T.font, fontSize: 11, color: T.textMuted, letterSpacing: "0.06em", textTransform: "none", fontWeight: 300 }}>
               {item.label}

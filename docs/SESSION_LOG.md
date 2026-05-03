@@ -158,3 +158,24 @@
 ### Статус деплоя
 ⬜ В процессе / ✅ Задеплоено / ❌ Отменено
 ```
+
+---
+## Сессия: Интеграция ЮKassa
+**Дата:** 03.05.2026
+**Длительность:** ~7 часов
+
+### Что сделано
+- Интеграция ЮKassa через Checkout.js токенизацию
+- Новый флоу: Контакты → Confirm (резерв 30 мин) → ЮKassa → Success
+- Success экран переработан в стиле ваучера/boarding pass
+- Fire-and-forget для create_record в YCLIENTS
+- Защита от двойного вызова next() в Master (StrictMode)
+- Роутер booking переименован /booking → /api/booking (конфликт со StaticFiles)
+- Деплой на Render: переменные YOOKASSA_*, BOOKING_BASE_URL, yookassa в requirements.txt
+
+### Открытые задачи (бэклог)
+- Переход с тестовых ключей ЮKassa на боевые
+- Перевыпустить YCLIENTS partner token
+- Настроить webhook ЮKassa
+- Безопасность: access_token для booking_id
+- Миграция инфраструктуры в РФ (Timeweb)

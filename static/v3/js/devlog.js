@@ -1,7 +1,7 @@
 // ============ DEV LOG ============
 // js/devlog.js
 
-const DL_API = 'https://insalon.onrender.com/dev-sessions';
+const DL_API = 'https://insalon.onrender.com/api/dev-sessions';
 
 const DL_CAT_COLOR = { analytics: 'bg-azure', dev: 'bg-indigo', design: 'bg-pink' };
 const DL_CAT_ICON  = { analytics: '📊', dev: '⌨️', design: '✦' };
@@ -101,11 +101,34 @@ function loadDevLog() {
       </div>
     </div>
   </div>
+
+  <!-- Backlog -->
+  <div class="card mt-3">
+    <div class="card-header">
+      <h3 class="card-title">Бэклог задач</h3>
+      <div class="card-options d-flex gap-2">
+        <select id="dl-bl-priority" class="form-select form-select-sm" style="width:100px">
+          <option value="">Все</option>
+          <option value="P0">P0</option>
+          <option value="P1">P1</option>
+          <option value="P2">P2</option>
+        </select>
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <div id="dl-backlog-wrap">
+        <div class="text-center text-muted py-4 small">Загрузка…</div>
+      </div>
+    </div>
+  </div>
+
 `;
 
   document.getElementById('dl-filter').addEventListener('change', dlLoadSessions);
+  document.getElementById('dl-bl-priority').addEventListener('change', dlLoadBacklog);
   dlLoadStats();
   dlLoadSessions();
+  dlLoadBacklog();
 }
 
 // ─── Пустые карточки-скелетоны пока данных нет ───────────────
@@ -293,5 +316,61 @@ async function dlSaveSession() {
     errEl.textContent = `Ошибка: ${e.message}`; errEl.classList.remove('d-none');
   } finally {
     btn.disabled = false; btn.textContent = 'Сохранить';
+  }
+}
+
+// ─── Backlog ──────────────────────────────────────────────────
+const PRIORITY_COLOR = { P0: 'bg-red', P1: 'bg-orange', P2: 'bg-secondary' };
+
+async function dlLoadBacklog() {
+  const wrap = document.getElementById('dl-backlog-wrap');
+  if (!wrap) return;
+  const priority = document.getElementById('dl-bl-priority')?.value || '';
+  let url = 'https://insalon.onrender.com/dev-sessions/backlog?status=open';
+  if (priority) url += `&priority=${priority}`;  // фильтр на фронте
+  try {
+    const res = await fetch('https://insalon.onrender.com/dev-sessions/backlog');
+    if (!res.ok) return;
+    let data = await res.json();
+    if (priority) data = data.filter(r => r.priority === priority);
+    if (!data.length) {
+      wrap.innerHTML = '<div class="text-center text-muted py-4 small">Бэклог пуст.</div>';
+      return;
+    }
+    const totalH   = data.reduce((s, r) => s + (r.planned_hours || 0), 0);
+    const totalTok = data.reduce((s, r) => s + (r.planned_tokens || 0), 0);
+    const rows = data.map(r => `
+      <tr>
+        <td><span class="badge ${PRIORITY_COLOR[r.priority]||'bg-secondary'} text-white">${r.priority}</span></td>
+        <td>${dlBadge(r.category)}</td>
+        <td>${dlEsc(r.feature)}</td>
+        <td class="text-end">${r.planned_hours ? r.planned_hours + ' ч' : '—'}</td>
+        <td class="text-end">${r.planned_tokens ? dlFmtK(r.planned_tokens) : '—'}</td>
+        <td class="text-muted small text-nowrap">${r.planned_date || '—'}</td>
+      </tr>`).join('');
+    wrap.innerHTML = `
+      <div class="table-responsive">
+        <table class="table table-vcenter card-table">
+          <thead><tr>
+            <th style="width:60px">Prior.</th>
+            <th style="width:100px">Категория</th>
+            <th>Задача</th>
+            <th class="text-end" style="width:80px">Часы</th>
+            <th class="text-end" style="width:80px">Токены</th>
+            <th style="width:100px">Дата</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot>
+            <tr class="fw-semibold">
+              <td colspan="3" class="text-muted small">Итого задач: ${data.length}</td>
+              <td class="text-end">${dlFmt(totalH)} ч</td>
+              <td class="text-end">${dlFmtK(totalTok)}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>`;
+  } catch(e) {
+    wrap.innerHTML = '<div class="text-center text-muted py-4 small">Нет данных.</div>';
   }
 }

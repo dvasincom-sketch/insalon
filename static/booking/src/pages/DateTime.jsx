@@ -38,6 +38,7 @@ export default function DateTime({ booking, next, back }) {
   const [slots, setSlots] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [nearest, setNearest] = useState(null);
+  const [noSlotsDays, setNoSlotsDays] = useState(new Set());
 
   useEffect(() => {
     getNearestSlot(booking.totalDuration, booking.service.id).then((data) => {
@@ -50,8 +51,12 @@ export default function DateTime({ booking, next, back }) {
     setLoadingSlots(true);
     setSelectedTime(null);
     getSlots([], booking.totalDuration, toISO(selectedDate), booking.service.id).then((data) => {
-      setSlots(data.slots || []);
+      const fetched = data.slots || [];
+      setSlots(fetched);
       setLoadingSlots(false);
+      if (fetched.length === 0) {
+        setNoSlotsDays((prev) => new Set([...prev, toISO(selectedDate)]));
+      }
     });
   }, [selectedDate]);
 
@@ -68,7 +73,8 @@ export default function DateTime({ booking, next, back }) {
   };
 
   const monthName = new Date(calYear, calMonth, 1)
-    .toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
+    .toLocaleDateString("ru-RU", { month: "long", year: "numeric" })
+    .replace(" г.", "");
 
   return (
     <div style={{ paddingBottom: 100 }}>
@@ -132,21 +138,26 @@ export default function DateTime({ booking, next, back }) {
             const isPast = iso < todayISO;
             const isToday = iso === todayISO;
             const isSel = selectedDate && toISO(selectedDate) === iso;
+            const isEmpty = noSlotsDays.has(iso);
             return (
               <div
                 key={iso}
-                onClick={() => !isPast && setSelectedDate(day)}
-                className={isPast ? "" : "cal-day"}
+                onClick={() => !isPast && !isEmpty && setSelectedDate(day)}
+                className={isPast || isEmpty ? "" : "cal-day"}
                 style={{
                   height: 34, display: "flex", alignItems: "center", justifyContent: "center",
                   fontFamily: T.font, fontSize: 12, borderRadius: 8,
-                  cursor: isPast ? "default" : "pointer",
+                  cursor: isPast || isEmpty ? "default" : "pointer",
                   fontWeight: isSel ? 500 : 300,
-                  color: isSel ? T.bg : isPast ? T.s3 : T.text,
+                  color: isSel ? T.bg : (isPast || isEmpty) ? T.s3 : isToday ? T.gold : T.text,
                   background: isSel ? T.gold : "transparent",
                   border: isToday && !isSel ? `1px solid ${T.gold}` : "1px solid transparent",
                   transition: "all 0.18s",
                   position: "relative",
+                  // Зачёркивание для дней без слотов
+                  textDecoration: isEmpty && !isSel ? "line-through" : "none",
+                  textDecorationColor: T.s3,
+                  opacity: isEmpty ? 0.45 : 1,
                 }}
               >
                 {day.getDate()}

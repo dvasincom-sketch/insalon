@@ -156,3 +156,26 @@ curl -X POST https://insalon.onrender.com/dev-sessions \
 
 Категории: `dev` / `design` / `analytics`
 Просмотр: https://insalon.onrender.com/dev-sessions/stats
+
+## Безопасность виджета записи [P1]
+
+### booking_id enumeration attack
+- Текущая проблема: GET /booking/booking/56 доступен без авторизации — можно перебирать ID и смотреть чужие записи
+- Решение: добавить `access_token` (UUID) в таблицу bookings при создании
+- Возвращать токен в response createBooking → хранить в URL как /booking/?token=UUID
+- Эндпоинт GET /booking/booking/{id} требует совпадения token
+- Success экран работает по токену, не по числовому ID
+
+### Дополнительно
+- Rate limiting на /booking/create (макс 5 запросов в минуту с одного IP)
+- Webhook от ЮKassa валидировать по IP whitelist
+
+## Magic Link / личный кабинет записи [P2]
+- Уникальная ссылка по booking_id без авторизации
+- История визита, рекомендации мастера, чаевые, повторная запись
+- iOS Wallet / PKPass
+- Скачать чек
+- Оставить отзыв
+
+## html2canvas — Сохранить как изображение [P2]
+- Реализовать кнопку на Success экране

@@ -1,7 +1,7 @@
 // ============ DEV LOG ============
 // js/devlog.js
 
-const DL_API = 'https://insalon.onrender.com/api/dev-sessions';
+const DL_API = 'https://insalon.onrender.com/dev-sessions';
 
 const DL_CAT_COLOR = { analytics: 'bg-azure', dev: 'bg-indigo', design: 'bg-pink' };
 const DL_CAT_ICON  = { analytics: '📊', dev: '⌨️', design: '✦' };
@@ -70,7 +70,7 @@ function dlEnsureModal() {
 
 // ─── Main entry ───────────────────────────────────────────────
 function loadDevLog() {
-  const screen = document.getElementById('screen-devlog-inner');
+  const screen = document.getElementById('screen-devlog');
   if (!screen) return;
 
   dlEnsureModal();

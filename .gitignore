@@ -9,3 +9,5 @@ static/v3/___*
 static/v3/js/_*
 static/v3/js/__*
 app/routers/_*
+!static/booking/dist
+!static/booking/dist/**

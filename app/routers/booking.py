@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from app.database import supabase
 import os
 
-router = APIRouter(prefix="/booking", tags=["Виджет записи"])
+router = APIRouter(prefix="/api/booking", tags=["Виджет записи"])
 
 COMPANY_ID = int(os.getenv("YCLIENTS_COMPANY_ID"))
 

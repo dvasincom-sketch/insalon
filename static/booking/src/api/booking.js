@@ -1,4 +1,6 @@
-const API = "http://localhost:8000";
+const API = import.meta.env.DEV
+  ? "http://localhost:8000"
+  : "https://insalon.onrender.com";
 
 export async function getCategories() {
   const r = await fetch(`${API}/api/booking/categories`);
@@ -38,4 +40,3 @@ export async function getBooking(bookingId) {
   const r = await fetch(`${API}/api/booking/booking/${bookingId}`);
   return r.json();
 }
-

@@ -124,6 +124,7 @@ async def get_featured(date: str = Query(None)):
                     "datetime": slot["datetime"],
                     "service_id": svc["id"],
                     "service_name": svc["name"],
+                    "category": svc.get("category", "other"),
                     "duration_min": slot["seance_length"] // 60,
                     **pricing
                 })
@@ -143,9 +144,13 @@ async def get_featured(date: str = Query(None)):
     token = get_user_token()
 
     featured_services = [
-        {"id": 19556836, "name": "«Экспресс» для двоих"},
-        {"id": 19655561, "name": "SPA для двоих в будни"},
-        {"id": 19468539, "name": "Ручной лимфодренажный массаж"},
+        {"id": 19655561, "name": "SPA для двоих в будни", "category": "spa"},
+        {"id": 19556836, "name": "Экспресс для двоих", "category": "spa"},
+        {"id": 19655588, "name": "SPA для мужчин Самурай", "category": "spa"},
+        {"id": 19556779, "name": "Перерождение для двоих", "category": "spa"},
+        {"id": 19468539, "name": "Ручной лимфодренажный массаж лица", "category": "face"},
+        {"id": 19468351, "name": "Расслабляющий массаж головы", "category": "head"},
+        {"id": 19468462, "name": "Пенный массаж головы", "category": "head"},
     ]
 
     svc_res = supabase.table("services").select("id,title,price_min").in_("id", [s["id"] for s in featured_services]).execute()
@@ -165,6 +170,7 @@ async def get_featured(date: str = Query(None)):
                     "datetime": slot["datetime"],
                     "service_id": svc["id"],
                     "service_name": svc["name"],
+                    "category": svc.get("category", "other"),
                     "duration_min": slot["seance_length"] // 60,
                     **pricing
                 })

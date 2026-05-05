@@ -99,9 +99,13 @@ async def get_featured(date: str = Query(None)):
 
     # Топ услуги с реальными ценами
     featured_services = [
-        {"id": 19556836, "name": "«Экспресс» для двоих", "duration": 100},
-        {"id": 19655561, "name": "SPA для двоих в будни", "duration": 120},
-        {"id": 19468539, "name": "Ручной лимфодренажный массаж", "duration": 190},
+        {"id": 19655561, "name": "SPA для двоих в будни", "duration": 120, "category": "spa"},
+        {"id": 19556836, "name": "Экспресс для двоих", "duration": 100, "category": "spa"},
+        {"id": 19655588, "name": "SPA для мужчин Самурай", "duration": 90, "category": "spa"},
+        {"id": 19556779, "name": "Перерождение для двоих", "duration": 150, "category": "spa"},
+        {"id": 19468539, "name": "Ручной лимфодренажный массаж лица", "duration": 60, "category": "face"},
+        {"id": 19468351, "name": "Расслабляющий массаж головы", "duration": 45, "category": "head"},
+        {"id": 19468462, "name": "Пенный массаж головы", "duration": 30, "category": "head"},
     ]
 
     svc_prices = {}

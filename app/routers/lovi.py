@@ -86,3 +86,88 @@ async def get_price(
         raise HTTPException(status_code=400, detail="Slot is in the past")
     return pricing
 
+
+
+@router.get("/featured")
+async def get_featured(date: str = Query(None)):
+    """Топ слоты дня по всем популярным услугам"""
+    from datetime import date as dt
+    if not date:
+        date = dt.today().isoformat()
+
+    token = get_user_token()
+
+    # Топ услуги с реальными ценами
+    featured_services = [
+        {"id": 19556836, "name": "«Экспресс» для двоих", "duration": 100},
+        {"id": 19655561, "name": "SPA для двоих в будни", "duration": 120},
+        {"id": 19468539, "name": "Ручной лимфодренажный массаж", "duration": 190},
+    ]
+
+    svc_prices = {}
+    svc_res = supabase.table("services").select("id,title,price_min").in_("id", [s["id"] for s in featured_services]).execute()
+    for s in svc_res.data:
+        svc_prices[s["id"]] = s["price_min"]
+
+    results = []
+    for svc in featured_services:
+        slots_resp = await get_book_times(COMPANY_ID, token, date, svc["id"])
+        slots = slots_resp.get("data", [])
+        # Берём только первые 2 слота на сегодня
+        for slot in slots[:2]:
+            slot_dt = datetime.fromisoformat(slot["datetime"])
+            base_price = svc_prices.get(svc["id"], 5000)
+            pricing = get_lovi_price(base_price, slot_dt)
+            if pricing and base_price >= 3000:
+                results.append({
+                    "time": slot["time"],
+                    "datetime": slot["datetime"],
+                    "service_id": svc["id"],
+                    "service_name": svc["name"],
+                    "duration_min": slot["seance_length"] // 60,
+                    **pricing
+                })
+
+    # Сортируем по времени
+    results.sort(key=lambda x: x["datetime"])
+    return {"date": date, "slots": results[:4]}
+
+
+@router.get("/featured")
+async def get_featured(date: str = Query(None)):
+    """Топ слоты дня по всем популярным услугам"""
+    from datetime import date as dt_module
+    if not date:
+        date = dt_module.today().isoformat()
+
+    token = get_user_token()
+
+    featured_services = [
+        {"id": 19556836, "name": "«Экспресс» для двоих"},
+        {"id": 19655561, "name": "SPA для двоих в будни"},
+        {"id": 19468539, "name": "Ручной лимфодренажный массаж"},
+    ]
+
+    svc_res = supabase.table("services").select("id,title,price_min").in_("id", [s["id"] for s in featured_services]).execute()
+    svc_prices = {s["id"]: s["price_min"] for s in svc_res.data}
+
+    results = []
+    for svc in featured_services:
+        slots_resp = await get_book_times(COMPANY_ID, token, date, svc["id"])
+        slots = slots_resp.get("data", [])
+        for slot in slots[:2]:
+            slot_dt = datetime.fromisoformat(slot["datetime"])
+            base_price = svc_prices.get(svc["id"], 5000)
+            pricing = get_lovi_price(base_price, slot_dt)
+            if pricing and base_price >= 3000:
+                results.append({
+                    "time": slot["time"],
+                    "datetime": slot["datetime"],
+                    "service_id": svc["id"],
+                    "service_name": svc["name"],
+                    "duration_min": slot["seance_length"] // 60,
+                    **pricing
+                })
+
+    results.sort(key=lambda x: x["datetime"])
+    return {"date": date, "slots": results[:4]}

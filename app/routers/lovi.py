@@ -130,7 +130,7 @@ async def get_featured(date: str = Query(None)):
 
     # Сортируем по времени
     results.sort(key=lambda x: x["datetime"])
-    return {"date": date, "slots": results[:4]}
+    return {"date": date, "slots": results[:8]}
 
 
 @router.get("/featured")
@@ -170,4 +170,4 @@ async def get_featured(date: str = Query(None)):
                 })
 
     results.sort(key=lambda x: x["datetime"])
-    return {"date": date, "slots": results[:4]}
+    return {"date": date, "slots": results[:8]}

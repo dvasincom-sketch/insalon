@@ -122,7 +122,7 @@ async def get_featured(date: str = Query(None)):
             slot_dt = datetime.fromisoformat(slot["datetime"])
             base_price = svc_prices.get(svc["id"], 5000)
             pricing = get_lovi_price(base_price, slot_dt)
-            if pricing and base_price >= 3000:
+            if pricing:
                 results.append({
                     "time": slot["time"],
                     "datetime": slot["datetime"],
@@ -168,7 +168,7 @@ async def get_featured(date: str = Query(None)):
             slot_dt = datetime.fromisoformat(slot["datetime"])
             base_price = svc_prices.get(svc["id"], 5000)
             pricing = get_lovi_price(base_price, slot_dt)
-            if pricing and base_price >= 3000:
+            if pricing:
                 results.append({
                     "time": slot["time"],
                     "datetime": slot["datetime"],

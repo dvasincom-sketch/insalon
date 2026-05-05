@@ -97,16 +97,29 @@ async def get_featured(date: str = Query(None)):
 
     token = get_user_token()
 
-    # Топ услуги с реальными ценами
-    featured_services = [
-        {"id": 19655561, "name": "SPA для двоих в будни", "duration": 120, "category": "spa"},
-        {"id": 19556836, "name": "Экспресс для двоих", "duration": 100, "category": "spa"},
-        {"id": 19655588, "name": "SPA для мужчин Самурай", "duration": 90, "category": "spa"},
-        {"id": 19556779, "name": "Перерождение для двоих", "duration": 150, "category": "spa"},
-        {"id": 19468539, "name": "Ручной лимфодренажный массаж лица", "duration": 60, "category": "face"},
-        {"id": 19468351, "name": "Расслабляющий массаж головы", "duration": 45, "category": "head"},
-        {"id": 19468462, "name": "Пенный массаж головы", "duration": 30, "category": "head"},
-    ]
+    # Услуги зависят от дня недели
+    from datetime import datetime as _dt
+    _weekday = _dt.now().weekday()  # 0=пн..4=пт, 5=сб, 6=вс
+    _is_weekend = _weekday >= 5
+
+    if _is_weekend:
+        featured_services = [
+            {"id": 19556779, "name": "Перерождение для двоих", "duration": 150, "category": "spa"},
+            {"id": 19655561, "name": "SPA для двоих в будни", "duration": 120, "category": "spa"},
+            {"id": 19556836, "name": "Экспресс для двоих", "duration": 100, "category": "spa"},
+            {"id": 19655588, "name": "SPA для мужчин Самурай", "duration": 90, "category": "spa"},
+            {"id": 19468539, "name": "Ручной лимфодренажный массаж лица", "duration": 60, "category": "face"},
+            {"id": 19468351, "name": "Расслабляющий массаж головы", "duration": 45, "category": "head"},
+            {"id": 19468462, "name": "Пенный массаж головы", "duration": 30, "category": "head"},
+        ]
+    else:
+        featured_services = [
+            {"id": 19655588, "name": "SPA для мужчин Самурай", "duration": 90, "category": "spa"},
+            {"id": 19468539, "name": "Ручной лимфодренажный массаж лица", "duration": 60, "category": "face"},
+            {"id": 19468351, "name": "Гималайский дзен (Relax Head SPA)", "duration": 90, "category": "head"},
+            {"id": 19468462, "name": "Пенный массаж головы", "duration": 30, "category": "head"},
+            {"id": 19468443, "name": "Паровая баня для волос", "duration": 20, "category": "head"},
+        ]
 
     svc_prices = {}
     svc_res = supabase.table("services").select("id,title,price_min").in_("id", [s["id"] for s in featured_services]).execute()

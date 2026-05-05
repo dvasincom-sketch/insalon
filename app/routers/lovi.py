@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Body
 from app.yclients import get_book_times
 from app.database import supabase
 from datetime import datetime, timezone, timedelta, date as dt_module
@@ -217,3 +217,103 @@ async def get_featured(date: str = Query(None)):
             tagged_popular = True
 
     return {"date": date, "slots": results}
+
+
+@router.post("/book")
+async def lovi_book(data: dict = Body(...)):
+    """Бронирование горящего слота через Lovi — обёртка над /api/booking/create"""
+    import uuid, os
+    from app.yclients import create_client, create_record, find_client_by_phone
+    import re, asyncio
+
+    token = get_user_token()
+    salon = supabase.table("salons").select("*").eq("company_id", COMPANY_ID).single().execute().data
+
+    # 1. Сохраняем бронирование с lovi_price
+    row = {
+        "company_id": COMPANY_ID,
+        "service_id": data.get("service_id"),
+        "service_title": data.get("service_title"),
+        "datetime": data.get("datetime"),
+        "duration": data.get("duration"),
+        "total_price": data.get("lovi_price"),
+        "master_id": data.get("staff_id"),
+        "master_name": data.get("staff_name"),
+        "client_name": data.get("client_name"),
+        "client_phone": data.get("client_phone"),
+        "client_email": data.get("client_email", ""),
+        "status": "pending",
+        "source": "lovi",
+    }
+    booking_result = supabase.table("bookings").insert(row).execute()
+    booking_id = booking_result.data[0]["id"]
+
+    # 2. Создаём/находим клиента в YCLIENTS
+    yclients_client_id = None
+    try:
+        existing = await create_client(
+            COMPANY_ID, token,
+            name=data.get("client_name"),
+            phone=data.get("client_phone"),
+            email=data.get("client_email", "")
+        )
+        if existing.get("success"):
+            yclients_client_id = existing.get("data", {}).get("id")
+        else:
+            raw_phone = data.get("client_phone", "")
+            normalized = "+" + re.sub(r"\D", "", raw_phone)
+            if normalized.startswith("+8"):
+                normalized = "+7" + normalized[2:]
+            found = await find_client_by_phone(COMPANY_ID, token, normalized)
+            if found:
+                yclients_client_id = found.get("id")
+    except Exception as e:
+        print(f"[LOVI BOOK] Ошибка клиента YCLIENTS: {e}")
+
+    # 3. Создаём запись в YCLIENTS (fire-and-forget)
+    record_data = {
+        "staff_id": data.get("staff_id"),
+        "services": [{"id": data.get("service_id")}],
+        "client": {"id": yclients_client_id} if yclients_client_id else {
+            "name": data.get("client_name"),
+            "phone": data.get("client_phone"),
+        },
+        "datetime": data.get("datetime").replace(" ", "T"),
+        "seance_length": data.get("duration"),
+        "comment": f"lovi.today | booking_id={booking_id}",
+    }
+    async def _create_record_bg():
+        try:
+            await create_record(COMPANY_ID, token, record_data)
+            print(f"[LOVI BOOK] YCLIENTS запись создана booking_id={booking_id}")
+        except Exception as e:
+            print(f"[LOVI BOOK] Ошибка записи YCLIENTS: {e}")
+    asyncio.create_task(_create_record_bg())
+
+    # 4. Создаём платёж YooKassa
+    try:
+        from app.routers.payments import get_yookassa
+        Payment = get_yookassa()
+        lovi_price = data.get("lovi_price", 0)
+        base_url = "https://lovi-web.onrender.com"
+        payment = Payment.create({
+            "amount": {"value": f"{lovi_price}.00", "currency": "RUB"},
+            "confirmation": {
+                "type": "redirect",
+                "return_url": f"{base_url}/confirm?booking_id={booking_id}"
+            },
+            "capture": True,
+            "description": f"Lovi #{booking_id} — {data.get('service_title', '')}",
+            "metadata": {"booking_id": str(booking_id), "source": "lovi"}
+        }, str(uuid.uuid4()))
+
+        supabase.table("bookings").update({
+            "payment_id": payment.id,
+            "status": "waiting_payment"
+        }).eq("id", booking_id).execute()
+
+        return {"booking_id": booking_id, "payment_url": payment.confirmation.confirmation_url}
+
+    except Exception as e:
+        print(f"[LOVI BOOK] Ошибка платежа: {e}")
+        return {"booking_id": booking_id, "payment_url": None, "error": str(e)}

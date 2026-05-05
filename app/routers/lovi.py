@@ -113,12 +113,15 @@ async def get_featured(date: str = Query(None)):
             {"id": 19468462, "name": "Пенный массаж головы", "duration": 30, "category": "head"},
         ]
     else:
+        # Только активные услуги доступные для онлайн-записи
         featured_services = [
-            {"id": 19655588, "name": "SPA для мужчин Самурай", "duration": 90, "category": "spa"},
-            {"id": 19468539, "name": "Ручной лимфодренажный массаж лица", "duration": 60, "category": "face"},
-            {"id": 19468351, "name": "Гималайский дзен (Relax Head SPA)", "duration": 90, "category": "head"},
-            {"id": 19468462, "name": "Пенный массаж головы", "duration": 30, "category": "head"},
-            {"id": 19468443, "name": "Паровая баня для волос", "duration": 20, "category": "head"},
+            {"id": 24560829, "name": "«Перерождение» (Premium Head SPA)", "duration": 120, "category": "head"},
+            {"id": 24562251, "name": "«Гималайский дзен» (Relax Head SPA)", "duration": 90, "category": "head"},
+            {"id": 24562305, "name": "«Гималайский экспресс» (Express Head SPA)", "duration": 60, "category": "head"},
+            {"id": 19655588, "name": "SPA для мужчин «Самурай»", "duration": 90, "category": "spa"},
+            {"id": 19658183, "name": "Массаж спины", "duration": 60, "category": "back"},
+            {"id": 19658189, "name": "Массаж всего тела", "duration": 90, "category": "body"},
+            {"id": 19658225, "name": "Массаж шейно-воротниковой зоны", "duration": 30, "category": "neck"},
         ]
 
     svc_prices = {}

@@ -202,7 +202,7 @@ async def get_nearest_slot(duration: int, service_id: int = 0):
 
     return {"date": None, "time": None}
 
-@router.get("/booking/{booking_id}")
+@router.get("/{booking_id}")
 async def get_booking(booking_id: int):
     result = supabase.table("bookings").select("*").eq("id", booking_id).execute()
     if not result.data:

@@ -316,3 +316,62 @@ async def lovi_book(data: dict = Body(...)):
     except Exception as e:
         print(f"[LOVI BOOK] Ошибка платежа: {e}")
         return {"booking_id": booking_id, "payment_url": None, "error": str(e)}
+
+
+# ── City Expansion ─────────────────────────────────────────────────────────
+
+@router.post("/city-waitlist")
+async def city_waitlist_subscribe(data: dict = Body(...)):
+    """Подписка на открытие Lovi в городе (форма «Узнать первым»)"""
+    city  = (data.get("city")  or "").strip()
+    email = (data.get("email") or "").strip().lower()
+
+    if not city:
+        raise HTTPException(status_code=422, detail="city is required")
+    if not email or "@" not in email:
+        raise HTTPException(status_code=422, detail="valid email is required")
+
+    try:
+        supabase.table("city_waitlist").upsert(
+            {"city": city, "email": email, "source": "lovi_hero"},
+            on_conflict="city,email",
+            ignore_duplicates=True,
+        ).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {"ok": True}
+
+
+@router.post("/city-partner")
+async def city_partner_request(data: dict = Body(...)):
+    """Заявка владельца салона на подключение к Lovi"""
+    city       = (data.get("city")       or "").strip()
+    name       = (data.get("name")       or "").strip()
+    phone      = (data.get("phone")      or "").strip()
+    salon_name = (data.get("salon_name") or "").strip()
+    address    = (data.get("address")    or "").strip() or None
+    crm        = (data.get("crm")        or "").strip() or None
+
+    if not city:
+        raise HTTPException(status_code=422, detail="city is required")
+    if not name:
+        raise HTTPException(status_code=422, detail="name is required")
+    if not phone or len(phone.replace("+", "").replace(" ", "")) < 10:
+        raise HTTPException(status_code=422, detail="valid phone is required")
+    if not salon_name:
+        raise HTTPException(status_code=422, detail="salon_name is required")
+
+    try:
+        supabase.table("city_partner_requests").insert({
+            "city":       city,
+            "name":       name,
+            "phone":      phone,
+            "salon_name": salon_name,
+            "address":    address,
+            "crm":        crm,
+        }).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {"ok": True}

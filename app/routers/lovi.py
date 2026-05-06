@@ -295,7 +295,7 @@ async def lovi_book(data: dict = Body(...)):
         from app.routers.payments import get_yookassa
         Payment = get_yookassa()
         lovi_price = data.get("lovi_price", 0)
-        base_url = "https://lovi-web.onrender.com"
+        base_url = os.getenv("LOVI_BASE_URL", "https://lovi-web.onrender.com")
         payment = Payment.create({
             "amount": {"value": f"{lovi_price}.00", "currency": "RUB"},
             "confirmation": {

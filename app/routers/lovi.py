@@ -349,6 +349,7 @@ async def city_partner_request(data: dict = Body(...)):
     city       = (data.get("city")       or "").strip()
     name       = (data.get("name")       or "").strip()
     phone      = (data.get("phone")      or "").strip()
+    email      = (data.get("email")      or "").strip() or None
     salon_name = (data.get("salon_name") or "").strip()
     address    = (data.get("address")    or "").strip() or None
     crm        = (data.get("crm")        or "").strip() or None

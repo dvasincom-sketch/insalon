@@ -38,7 +38,8 @@ async def get_slots(date: str, duration: int, service_id: int = 0):
 async def get_available_staff(datetime: str, duration: int, service_id: int = 0):
     """Мастера доступные в выбранный слот — проверка через YCLIENTS"""
     date = datetime.split(" ")[0]
-    time = datetime.split(" ")[1] if " " in datetime else "00:00"
+    time_full = datetime.split(" ")[1] if " " in datetime else "00:00"
+    time = ":".join(time_full.split(":")[:2])  # берём только HH:MM без секунд
 
     # Только активные мастера
     all_staff = supabase.table("staff").select(
@@ -55,7 +56,7 @@ async def get_available_staff(datetime: str, duration: int, service_id: int = 0)
     for staff in all_staff:
         data = await get_book_times(COMPANY_ID, user_token, date, service_id, staff["id"])
         times = [t["time"] for t in data.get("data", [])]
-        if time in times:
+        if time in times or time_full[:5] in times:
             available.append(staff)
 
     return available

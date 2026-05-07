@@ -129,8 +129,9 @@ async def register(data: RegisterIn):
     token = make_token(user["id"], user["email"])
     try:
         send_welcome_email(user["name"], user["email"])
-    except Exception:
-        pass  # не блокируем регистрацию если письмо не ушло
+    except Exception as e:
+        import logging
+        logging.error(f"Welcome email failed: {e}")
     return {"token": token, "user": {"id": user["id"], "name": user["name"], "email": user["email"]}}
 
 @router.post("/login")
@@ -144,8 +145,9 @@ async def login(data: LoginIn):
     token = make_token(user["id"], user["email"])
     try:
         send_welcome_email(user["name"], user["email"])
-    except Exception:
-        pass  # не блокируем регистрацию если письмо не ушло
+    except Exception as e:
+        import logging
+        logging.error(f"Welcome email failed: {e}")
     return {"token": token, "user": {"id": user["id"], "name": user["name"], "email": user["email"]}}
 
 # ─── My Bookings ───────────────────────────────────────────────────────────────

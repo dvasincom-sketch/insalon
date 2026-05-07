@@ -284,8 +284,12 @@ async def lovi_book(data: dict = Body(...)):
     }
     async def _create_record_bg():
         try:
-            await create_record(COMPANY_ID, token, record_data)
-            print(f"[LOVI BOOK] YCLIENTS запись создана booking_id={booking_id}")
+            result = await create_record(COMPANY_ID, token, record_data)
+            print(f"[LOVI BOOK] YCLIENTS ответ: {result}")
+            if result.get("success"):
+                print(f"[LOVI BOOK] YCLIENTS запись создана booking_id={booking_id}")
+            else:
+                print(f"[LOVI BOOK] YCLIENTS ОШИБКА booking_id={booking_id}: {result}")
         except Exception as e:
             print(f"[LOVI BOOK] Ошибка записи YCLIENTS: {e}")
     asyncio.create_task(_create_record_bg())

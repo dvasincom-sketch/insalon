@@ -257,9 +257,9 @@ async def lovi_book(data: dict = Body(...)):
             phone=data.get("client_phone"),
             email=data.get("client_email", "")
         )
-        if existing.get("success"):
+        if existing and existing.get("success"):
             yclients_client_id = existing.get("data", {}).get("id")
-        else:
+        if not yclients_client_id:
             raw_phone = data.get("client_phone", "")
             normalized = "+" + re.sub(r"\D", "", raw_phone)
             if normalized.startswith("+8"):
@@ -267,12 +267,15 @@ async def lovi_book(data: dict = Body(...)):
             found = await find_client_by_phone(COMPANY_ID, token, normalized)
             if found:
                 yclients_client_id = found.get("id")
+        print(f"[LOVI BOOK] client_id={yclients_client_id}")
     except Exception as e:
         print(f"[LOVI BOOK] Ошибка клиента YCLIENTS: {e}")
 
     # 3. Создаём запись в YCLIENTS (fire-and-forget)
+    staff_id = data.get("staff_id") or data.get("staff", {}).get("id") if isinstance(data.get("staff"), dict) else data.get("staff_id")
+    print(f"[LOVI BOOK] staff_id from request: {data.get('staff_id')}, staff: {data.get('staff')}")
     record_data = {
-        "staff_id": data.get("staff_id"),
+        "staff_id": staff_id,
         "services": [{"id": data.get("service_id")}],
         "client": {"id": yclients_client_id} if yclients_client_id else {
             "name": data.get("client_name"),

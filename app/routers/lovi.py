@@ -222,7 +222,7 @@ async def get_featured(date: str = Query(None)):
 @router.post("/book")
 async def lovi_book(data: dict = Body(...)):
     """Бронирование горящего слота через Lovi — обёртка над /api/booking/create"""
-    import uuid, os
+    import uuid, os, hmac, hashlib
     from app.yclients import create_client, create_record, find_client_by_phone
     import re, asyncio
 
@@ -245,6 +245,10 @@ async def lovi_book(data: dict = Body(...)):
         "user_id": data.get("user_id") or None,
         "status": "pending",
     }
+    # Генерируем непредсказуемый код брони
+    _secret = os.getenv("BOOKING_CODE_SECRET", "lovi-secret-2026")
+    _raw = hmac.new(_secret.encode(), f"{uuid.uuid4()}".encode(), hashlib.sha256).hexdigest()[:10].upper()
+    row["booking_code"] = f"{_raw[:4]}-{_raw[4:8]}"
     booking_result = supabase.table("bookings").insert(row).execute()
     booking_id = booking_result.data[0]["id"]
 

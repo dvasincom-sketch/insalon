@@ -76,7 +76,7 @@ def send_welcome_email(name: str, email: str):
         <div class="cta-label">Доступно сейчас</div>
         <div class="cta-title">Слоты на сегодня открыты</div>
         <div class="cta-sub">Цена каждого слота — реальная стоимость в салоне как точка отсчёта.<br>Выгода рассчитывается автоматически, исходя из времени до начала.</div>
-        <a href="https://lovi.today" class="cta-btn">Смотреть окошки</a>
+        <a href="https://lovi.today" style="display:inline-block;background:#ffffff;color:#121A12 !important;text-decoration:none !important;padding:13px 26px;border-radius:11px;font-size:14px;font-weight:600;">Смотреть окошки</a>
       </div>
       <div class="principle">
         

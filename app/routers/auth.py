@@ -53,7 +53,7 @@ def send_welcome_email(name: str, email: str):
     .cta-btn {{ display:inline-block;background:#F97316;color:#fff;text-decoration:none;padding:13px 26px;border-radius:11px;font-size:14px;font-weight:600; }}
     .principle {{ display:flex;gap:16px;align-items:flex-start;padding:18px 0;border-bottom:1px solid rgba(18,26,18,0.06); }}
     .principle:last-child {{ border-bottom:none;padding-bottom:0; }}
-    .principle:first-child {{ padding-top:0; }}
+    .principle:first-child {{ padding-top:0;border-top:none; }}
     .icon-box {{ width:36px;height:36px;border-radius:10px;background:#F1F0EC;display:flex;align-items:center;justify-content:center;flex-shrink:0; }}
     .p-title {{ font-size:14px;font-weight:600;color:#121A12;margin-bottom:4px; }}
     .p-text {{ font-size:13px;color:#8F8475;line-height:1.6; }}
@@ -79,15 +79,15 @@ def send_welcome_email(name: str, email: str):
         <a href="https://lovi.today" class="cta-btn">Смотреть окошки</a>
       </div>
       <div class="principle">
-        <div class="icon-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#121A12" stroke-width="1.5" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        <div class="icon-box" style="width:36px;height:36px;border-radius:10px;background:#F1F0EC;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px;color:#121A12;font-weight:600;">₽</div>
         <div><div class="p-title">Прозрачность настоящей ценности</div><div class="p-text">Мы не продаём скидки. Мы показываем реальную цену салона как точку отсчёта — и рассчитываем вашу выгоду без манипуляций. Вы сами принимаете решение.</div></div>
       </div>
       <div class="principle">
-        <div class="icon-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#121A12" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+        <div class="icon-box" style="width:36px;height:36px;border-radius:10px;background:#F1F0EC;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px;color:#121A12;font-weight:600;">◷</div>
         <div><div class="p-title">Уважение к времени</div><div class="p-text">Каждый слот — это конкретная минута, которую салон иначе потеряет. Мы не растягиваем выбор: таймер, цена, действие. Ваше время стоит ровно столько, сколько вы решаете потратить.</div></div>
       </div>
       <div class="principle">
-        <div class="icon-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#121A12" stroke-width="1.5" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+        <div class="icon-box" style="width:36px;height:36px;border-radius:10px;background:#F1F0EC;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px;color:#121A12;font-weight:600;">✓</div>
         <div><div class="p-title">Честная технологичность</div><div class="p-text">Предоплата удерживается платформой до подтверждения визита. Если что-то пошло не так — деньги возвращаются в течение 24 часов. Никаких исключений.</div></div>
       </div>
       <div class="divider"></div>

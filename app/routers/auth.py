@@ -15,6 +15,7 @@ class RegisterIn(BaseModel):
     name: str
     email: EmailStr
     password: str
+    phone: str = ""
 
 class LoginIn(BaseModel):
     email: EmailStr
@@ -50,6 +51,7 @@ async def register(data: RegisterIn):
         "name": data.name,
         "email": data.email,
         "password_hash": hash_password(data.password),
+        "phone": data.phone or None,
         "created_at": datetime.utcnow().isoformat(),
     }).execute()
     user = res.data[0]
@@ -59,7 +61,7 @@ async def register(data: RegisterIn):
     except Exception as e:
         import logging
         logging.error(f"Welcome email failed: {e}")
-    return {"token": token, "user": {"id": user["id"], "name": user["name"], "email": user["email"]}}
+    return {"token": token, "user": {"id": user["id"], "name": user["name"], "email": user["email"], "phone": user.get("phone","")}}
 
 @router.post("/login")
 async def login(data: LoginIn):
@@ -75,7 +77,7 @@ async def login(data: LoginIn):
     except Exception as e:
         import logging
         logging.error(f"Welcome email failed: {e}")
-    return {"token": token, "user": {"id": user["id"], "name": user["name"], "email": user["email"]}}
+    return {"token": token, "user": {"id": user["id"], "name": user["name"], "email": user["email"], "phone": user.get("phone","")}}
 
 # ─── My Bookings ───────────────────────────────────────────────────────────────
 

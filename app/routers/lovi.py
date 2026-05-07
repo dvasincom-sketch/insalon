@@ -284,6 +284,7 @@ async def lovi_book(data: dict = Body(...)):
     }
     async def _create_record_bg():
         try:
+            print(f"[LOVI BOOK] Отправляем в YCLIENTS: {record_data}")
             result = await create_record(COMPANY_ID, token, record_data)
             print(f"[LOVI BOOK] YCLIENTS ответ: {result}")
             if result.get("success"):

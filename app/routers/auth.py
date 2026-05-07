@@ -50,7 +50,7 @@ def send_welcome_email(name: str, email: str):
     .cta-label {{ font-size:10px;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.14em;margin-bottom:10px; }}
     .cta-title {{ font-size:18px;font-weight:700;color:#fff;margin-bottom:6px;font-family:Georgia,serif;line-height:1.3; }}
     .cta-sub {{ font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:24px;line-height:1.6; }}
-    .cta-btn {{ display:inline-block;background:#F97316;color:#fff;text-decoration:none;padding:13px 26px;border-radius:11px;font-size:14px;font-weight:600; }}
+    .cta-btn {{ display:inline-block;background:#ffffff;color:#121A12;text-decoration:none;padding:13px 26px;border-radius:11px;font-size:14px;font-weight:600; }}
     .principle {{ display:flex;gap:16px;align-items:flex-start;padding:18px 0;border-bottom:1px solid rgba(18,26,18,0.06); }}
     .principle:last-child {{ border-bottom:none;padding-bottom:0; }}
     .principle:first-child {{ padding-top:0;border-top:none; }}
@@ -79,15 +79,15 @@ def send_welcome_email(name: str, email: str):
         <a href="https://lovi.today" class="cta-btn">Смотреть окошки</a>
       </div>
       <div class="principle">
-        <div class="icon-box" style="width:36px;height:36px;border-radius:10px;background:#F1F0EC;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px;color:#121A12;font-weight:600;">₽</div>
+        
         <div><div class="p-title">Прозрачность настоящей ценности</div><div class="p-text">Мы не продаём скидки. Мы показываем реальную цену салона как точку отсчёта — и рассчитываем вашу выгоду без манипуляций. Вы сами принимаете решение.</div></div>
       </div>
       <div class="principle">
-        <div class="icon-box" style="width:36px;height:36px;border-radius:10px;background:#F1F0EC;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px;color:#121A12;font-weight:600;">◷</div>
+        
         <div><div class="p-title">Уважение к времени</div><div class="p-text">Каждый слот — это конкретная минута, которую салон иначе потеряет. Мы не растягиваем выбор: таймер, цена, действие. Ваше время стоит ровно столько, сколько вы решаете потратить.</div></div>
       </div>
       <div class="principle">
-        <div class="icon-box" style="width:36px;height:36px;border-radius:10px;background:#F1F0EC;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px;color:#121A12;font-weight:600;">✓</div>
+        
         <div><div class="p-title">Честная технологичность</div><div class="p-text">Предоплата удерживается платформой до подтверждения визита. Если что-то пошло не так — деньги возвращаются в течение 24 часов. Никаких исключений.</div></div>
       </div>
       <div class="divider"></div>

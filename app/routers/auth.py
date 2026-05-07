@@ -32,87 +32,14 @@ def check_password(password: str, hashed: str) -> bool:
 
 
 def send_welcome_email(name: str, email: str):
-    html = f"""<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Добро пожаловать в «Лови»</title>
-  <style>
-    * {{ margin:0;padding:0;box-sizing:border-box; }}
-    body {{ background:#F1F0EC;font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif; }}
-    .wrapper {{ max-width:560px;margin:40px auto;background:#FDFCF9;border-radius:24px;overflow:hidden;box-shadow:0 4px 32px rgba(18,26,18,0.08); }}
-    .header {{ background:#121A12;padding:28px 40px; }}
-    .body {{ padding:40px; }}
-    .greeting {{ font-size:22px;font-weight:700;color:#121A12;margin-bottom:16px;line-height:1.35;font-family:Georgia,serif; }}
-    .text {{ font-size:15px;color:#5C5347;line-height:1.75;margin-bottom:20px; }}
-    .cta-block {{ background:#121A12;border-radius:16px;padding:28px 32px;margin:32px 0; }}
-    .cta-label {{ font-size:10px;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.14em;margin-bottom:10px; }}
-    .cta-title {{ font-size:18px;font-weight:700;color:#fff;margin-bottom:6px;font-family:Georgia,serif;line-height:1.3; }}
-    .cta-sub {{ font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:24px;line-height:1.6; }}
-    .cta-btn {{ display:inline-block;background:#ffffff;color:#121A12;text-decoration:none;padding:13px 26px;border-radius:11px;font-size:14px;font-weight:600; }}
-    .principle {{ display:flex;gap:16px;align-items:flex-start;padding:18px 0;border-bottom:1px solid rgba(18,26,18,0.06); }}
-    .principle:last-child {{ border-bottom:none;padding-bottom:0; }}
-    .principle:first-child {{ padding-top:0;border-top:none; }}
-    .icon-box {{ width:36px;height:36px;border-radius:10px;background:#F1F0EC;display:flex;align-items:center;justify-content:center;flex-shrink:0; }}
-    .p-title {{ font-size:14px;font-weight:600;color:#121A12;margin-bottom:4px; }}
-    .p-text {{ font-size:13px;color:#8F8475;line-height:1.6; }}
-    .divider {{ height:1px;background:rgba(18,26,18,0.06);margin:32px 0; }}
-    .signature {{ font-size:14px;color:#5C5347;line-height:1.75; }}
-    .footer {{ padding:22px 40px;background:#F1F0EC; }}
-    .footer-text {{ font-size:11px;color:#A09485;line-height:1.6;text-align:center; }}
-    .footer-text a {{ color:#A09485;text-decoration:underline; }}
-  </style>
-</head>
-<body>
-  <div class="wrapper">
-    <div class="header">
-      <img src="https://lovi.today/logo_w.svg" alt="«Лови»" height="26" style="display:block;">
-    </div>
-    <div class="body">
-      <div class="greeting">{name}, вы в «Лови»</div>
-      <p class="text">«Лови» — это платформа, которая показывает реальную стоимость времени в лучших SPA и массажных салонах Москвы. Не скидки ради скидок — а прозрачный доступ к слотам, которые салон иначе потеряет. Вы видите честную цену, таймер и одно действие. Без давления.</p>
-      <div class="cta-block">
-        <div class="cta-label">Доступно сейчас</div>
-        <div class="cta-title">Слоты на сегодня открыты</div>
-        <div class="cta-sub">Цена каждого слота — реальная стоимость в салоне как точка отсчёта.<br>Выгода рассчитывается автоматически, исходя из времени до начала.</div>
-        <a href="https://lovi.today" style="display:inline-block;background:#ffffff;color:#121A12 !important;text-decoration:none !important;padding:13px 26px;border-radius:11px;font-size:14px;font-weight:600;">Смотреть окошки</a>
-      </div>
-      <div class="principle">
-        
-        <div><div class="p-title">Прозрачность настоящей ценности</div><div class="p-text">Мы не продаём скидки. Мы показываем реальную цену салона как точку отсчёта — и рассчитываем вашу выгоду без манипуляций. Вы сами принимаете решение.</div></div>
-      </div>
-      <div class="principle">
-        
-        <div><div class="p-title">Уважение к времени</div><div class="p-text">Каждый слот — это конкретная минута, которую салон иначе потеряет. Мы не растягиваем выбор: таймер, цена, действие. Ваше время стоит ровно столько, сколько вы решаете потратить.</div></div>
-      </div>
-      <div class="principle">
-        
-        <div><div class="p-title">Честная технологичность</div><div class="p-text">Предоплата удерживается платформой до подтверждения визита. Если что-то пошло не так — деньги возвращаются в течение 24 часов. Никаких исключений.</div></div>
-      </div>
-      <div class="divider"></div>
-      <div class="signature">
-        <p>Если появятся вопросы — напишите нам: <a href="mailto:support@lovi.today" style="color:#121A12;font-weight:600;">support@lovi.today</a></p>
-        <br>
-        <p><strong style="color:#121A12;">Команда «Лови»</strong><br>
-        <span style="font-size:13px;color:#8F8475;">lovi.today · Москва</span></p>
-      </div>
-    </div>
-    <div class="footer">
-      <div class="footer-text">
-        Вы получили это письмо, потому что зарегистрировались на <a href="https://lovi.today">lovi.today</a>.<br>
-        <a href="https://lovi.today/unsubscribe?email={email}">Отписаться</a>
-      </div>
-    </div>
-  </div>
-</body>
-</html>"""
+    html = render_template("welcome", subject="Добро пожаловать в «Лови»", name=name, email=email)
     resend.Emails.send({
         "from": "«Лови» <noreply@lovi.today>",
         "to": email,
         "subject": "Добро пожаловать в «Лови»",
         "html": html,
     })
+
 
 @router.post("/register")
 async def register(data: RegisterIn):
@@ -192,6 +119,7 @@ async def rate_booking(data: RatingIn, authorization: str = Header(...)):
 
 # ─── Password Reset ────────────────────────────────────────────────────────────
 import resend, secrets
+from app.emails.utils import render_template
 from datetime import timezone
 
 resend.api_key = os.getenv("RESEND_API_KEY")
@@ -235,19 +163,12 @@ async def forgot_password(data: ForgotIn, request: Request):
         "meta": {"user_id": user["id"]}
     }).execute()
     reset_url = f"{LOVI_BASE_URL}/reset-password?token={token}"
+    html = render_template("forgot_password", subject="Сброс пароля «Лови»", name=user["name"], email=user["email"], reset_url=reset_url)
     resend.Emails.send({
-        "from": "Lovi <noreply@lovi.today>",
+        "from": "«Лови» <noreply@lovi.today>",
         "to": user["email"],
-        "subject": "Сброс пароля Lovi",
-        "html": f"""
-        <div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#FDFCF9;">
-          <div style="font-size:22px;font-weight:700;color:#121A12;margin-bottom:8px;font-family:Georgia,serif;">Лови</div>
-          <p style="font-size:15px;color:#121A12;margin:24px 0 8px;">Привет, {user['name']}!</p>
-          <p style="font-size:14px;color:#8F8475;line-height:1.6;margin:0 0 24px;">Вы запросили сброс пароля. Ссылка действительна 2 часа.</p>
-          <a href="{reset_url}" style="display:inline-block;background:#121A12;color:#fff;text-decoration:none;padding:14px 28px;border-radius:12px;font-size:14px;font-weight:600;">Сбросить пароль</a>
-          <p style="font-size:12px;color:#8F8475;margin-top:24px;line-height:1.6;">Если вы не запрашивали сброс — просто проигнорируйте это письмо.</p>
-        </div>
-        """,
+        "subject": "Сброс пароля «Лови»",
+        "html": html,
     })
     return {"ok": True}
 

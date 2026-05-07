@@ -242,6 +242,7 @@ async def lovi_book(data: dict = Body(...)):
         "client_name": data.get("client_name"),
         "client_phone": data.get("client_phone"),
         "client_email": data.get("client_email", ""),
+        "user_id": data.get("user_id") or None,
         "status": "pending",
     }
     booking_result = supabase.table("bookings").insert(row).execute()

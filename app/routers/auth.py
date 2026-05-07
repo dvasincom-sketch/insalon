@@ -32,7 +32,7 @@ def check_password(password: str, hashed: str) -> bool:
 
 
 def send_welcome_email(name: str, email: str):
-    html = render_template("welcome", subject="Добро пожаловать в «Лови»", name=name, email=email)
+    html = render_template(template="welcome", subject="Добро пожаловать в «Лови»", name=name, email=email)
     resend.Emails.send({
         "from": "«Лови» <noreply@lovi.today>",
         "to": email,
@@ -163,7 +163,7 @@ async def forgot_password(data: ForgotIn, request: Request):
         "meta": {"user_id": user["id"]}
     }).execute()
     reset_url = f"{LOVI_BASE_URL}/reset-password?token={token}"
-    html = render_template("forgot_password", subject="Сброс пароля «Лови»", name=user["name"], email=user["email"], reset_url=reset_url)
+    html = render_template(template="forgot_password", subject="Сброс пароля «Лови»", name=user["name"], email=user["email"], reset_url=reset_url)
     resend.Emails.send({
         "from": "«Лови» <noreply@lovi.today>",
         "to": user["email"],

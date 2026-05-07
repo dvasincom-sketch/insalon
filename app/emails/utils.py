@@ -2,9 +2,9 @@ import os
 
 EMAILS_DIR = os.path.dirname(__file__)
 
-def render_template(name: str, subject: str = "", **kwargs) -> str:
+def render_template(template: str, subject: str = "", **kwargs) -> str:
     # Загружаем body шаблон
-    body_path = os.path.join(EMAILS_DIR, f"{name}.html")
+    body_path = os.path.join(EMAILS_DIR, f"{template}.html")
     with open(body_path) as f:
         body = f.read()
     # Подставляем переменные в body

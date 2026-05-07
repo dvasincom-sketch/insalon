@@ -352,8 +352,9 @@ async def city_waitlist_subscribe(data: dict = Body(...)):
             "subject": f"«Лови» скоро в {city}",
             "html": html,
         })
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.error(f"city_waitlist email error: {e}")
     return {"ok": True}
 
 

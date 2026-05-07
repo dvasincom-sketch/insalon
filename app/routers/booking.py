@@ -209,3 +209,19 @@ async def get_booking(booking_id: int):
     if not result.data:
         return {"error": "Запись не найдена"}
     return result.data[0]
+
+@router.post("/checkin/{booking_code}")
+async def checkin_booking(booking_code: str):
+    result = supabase.table("bookings").select("*").eq("booking_code", booking_code).execute()
+    if not result.data:
+        raise HTTPException(404, "Бронирование не найдено")
+    b = result.data[0]
+    if b.get("checkin_used_at"):
+        raise HTTPException(400, f"Код уже использован {b['checkin_used_at']}")
+    if b.get("status") not in ("paid", "confirmed"):
+        raise HTTPException(400, "Бронирование не оплачено")
+    from datetime import datetime, timezone
+    supabase.table("bookings").update({
+        "checkin_used_at": datetime.now(timezone.utc).isoformat()
+    }).eq("booking_code", booking_code).execute()
+    return {"ok": True, "client_name": b.get("client_name"), "service_title": b.get("service_title"), "datetime": b.get("datetime")}

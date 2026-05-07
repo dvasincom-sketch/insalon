@@ -101,7 +101,9 @@ def create_client_sync(company_id: int, user_token: str, name: str, phone: str, 
             headers=get_auth_headers(user_token),
             json={"name": name, "phone": phone, "email": email}
         )
-        return response.json()
+        result = response.json()
+        print(f"[YCLIENTS] create_client response: {result}")
+        return result
 
 def create_record_sync(company_id: int, user_token: str, data: dict):
     with httpx.Client(timeout=5.0, verify=False) as client:

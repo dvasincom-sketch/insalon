@@ -340,6 +340,20 @@ async def city_waitlist_subscribe(data: dict = Body(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+    try:
+        import resend as _resend
+        from app.emails.utils import render_template
+        import os
+        _resend.api_key = os.getenv("RESEND_API_KEY")
+        html = render_template(template="city_waitlist", subject="test", email=email, city=city)
+        _resend.Emails.send({
+            "from": "«Лови» <noreply@lovi.today>",
+            "to": email,
+            "subject": f"«Лови» скоро в {city}",
+            "html": html,
+        })
+    except Exception:
+        pass
     return {"ok": True}
 
 

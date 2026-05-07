@@ -92,7 +92,7 @@ def send_welcome_email(name: str, email: str):
       </div>
       <div class="divider"></div>
       <div class="signature">
-        <p>Если появятся вопросы — просто ответьте на это письмо.<br>Мы читаем каждое.</p>
+        <p>Если появятся вопросы — напишите нам: <a href="mailto:support@lovi.today" style="color:#121A12;font-weight:600;">support@lovi.today</a></p>
         <br>
         <p><strong style="color:#121A12;">Команда «Лови»</strong><br>
         <span style="font-size:13px;color:#8F8475;">lovi.today · Москва</span></p>

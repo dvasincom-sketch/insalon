@@ -55,3 +55,43 @@ async def login(data: LoginIn):
         raise HTTPException(401, "Неверный email или пароль")
     token = make_token(user["id"], user["email"])
     return {"token": token, "user": {"id": user["id"], "name": user["name"], "email": user["email"]}}
+
+# ─── My Bookings ───────────────────────────────────────────────────────────────
+
+from fastapi import Header
+from jose import JWTError
+
+def get_user_id(authorization: str = Header(...)) -> int:
+    try:
+        token = authorization.replace("Bearer ", "")
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return int(payload["sub"])
+    except (JWTError, KeyError):
+        raise HTTPException(401, "Невалидный токен")
+
+@router.get("/my-bookings")
+async def my_bookings(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    res = supabase.table("bookings").select("*").eq("user_id", user_id).order("datetime", desc=True).execute()
+    return {"bookings": res.data}
+
+class RatingIn(BaseModel):
+    booking_id: int
+    rating_place: int
+    rating_master: int
+    rating_service: int
+    review_text: str = ""
+
+@router.post("/rate")
+async def rate_booking(data: RatingIn, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    booking = supabase.table("bookings").select("id,user_id").eq("id", data.booking_id).execute()
+    if not booking.data or booking.data[0]["user_id"] != user_id:
+        raise HTTPException(403, "Нет доступа")
+    supabase.table("bookings").update({
+        "rating_place": data.rating_place,
+        "rating_master": data.rating_master,
+        "rating_service": data.rating_service,
+        "review_text": data.review_text,
+    }).eq("id", data.booking_id).execute()
+    return {"ok": True}

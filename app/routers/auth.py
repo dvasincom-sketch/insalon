@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 from jose import jwt
 from datetime import datetime, timedelta
@@ -30,6 +30,90 @@ def hash_password(password: str) -> str:
 def check_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode()[:72], hashed.encode())
 
+
+def send_welcome_email(name: str, email: str):
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Добро пожаловать в «Лови»</title>
+  <style>
+    * {{ margin:0;padding:0;box-sizing:border-box; }}
+    body {{ background:#F1F0EC;font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif; }}
+    .wrapper {{ max-width:560px;margin:40px auto;background:#FDFCF9;border-radius:24px;overflow:hidden;box-shadow:0 4px 32px rgba(18,26,18,0.08); }}
+    .header {{ background:#121A12;padding:28px 40px; }}
+    .body {{ padding:40px; }}
+    .greeting {{ font-size:22px;font-weight:700;color:#121A12;margin-bottom:16px;line-height:1.35;font-family:Georgia,serif; }}
+    .text {{ font-size:15px;color:#5C5347;line-height:1.75;margin-bottom:20px; }}
+    .cta-block {{ background:#121A12;border-radius:16px;padding:28px 32px;margin:32px 0; }}
+    .cta-label {{ font-size:10px;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.14em;margin-bottom:10px; }}
+    .cta-title {{ font-size:18px;font-weight:700;color:#fff;margin-bottom:6px;font-family:Georgia,serif;line-height:1.3; }}
+    .cta-sub {{ font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:24px;line-height:1.6; }}
+    .cta-btn {{ display:inline-block;background:#F97316;color:#fff;text-decoration:none;padding:13px 26px;border-radius:11px;font-size:14px;font-weight:600; }}
+    .principle {{ display:flex;gap:16px;align-items:flex-start;padding:18px 0;border-bottom:1px solid rgba(18,26,18,0.06); }}
+    .principle:last-child {{ border-bottom:none;padding-bottom:0; }}
+    .principle:first-child {{ padding-top:0; }}
+    .icon-box {{ width:36px;height:36px;border-radius:10px;background:#F1F0EC;display:flex;align-items:center;justify-content:center;flex-shrink:0; }}
+    .p-title {{ font-size:14px;font-weight:600;color:#121A12;margin-bottom:4px; }}
+    .p-text {{ font-size:13px;color:#8F8475;line-height:1.6; }}
+    .divider {{ height:1px;background:rgba(18,26,18,0.06);margin:32px 0; }}
+    .signature {{ font-size:14px;color:#5C5347;line-height:1.75; }}
+    .footer {{ padding:22px 40px;background:#F1F0EC; }}
+    .footer-text {{ font-size:11px;color:#A09485;line-height:1.6;text-align:center; }}
+    .footer-text a {{ color:#A09485;text-decoration:underline; }}
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <img src="https://lovi.today/logo.svg" alt="«Лови»" height="26" style="display:block;">
+    </div>
+    <div class="body">
+      <div class="greeting">{name}, вы в «Лови»</div>
+      <p class="text">«Лови» — это платформа, которая показывает реальную стоимость времени в лучших SPA и массажных салонах Москвы. Не скидки ради скидок — а прозрачный доступ к слотам, которые салон иначе потеряет. Вы видите честную цену, таймер и одно действие. Без давления.</p>
+      <div class="cta-block">
+        <div class="cta-label">Доступно сейчас</div>
+        <div class="cta-title">Слоты на сегодня открыты</div>
+        <div class="cta-sub">Цена каждого слота — реальная стоимость в салоне как точка отсчёта.<br>Выгода рассчитывается автоматически, исходя из времени до начала.</div>
+        <a href="https://lovi.today" class="cta-btn">Смотреть доступные окошки →</a>
+      </div>
+      <div class="principle">
+        <div class="icon-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#121A12" stroke-width="1.5" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        <div><div class="p-title">Прозрачность настоящей ценности</div><div class="p-text">Мы не продаём скидки. Мы показываем реальную цену салона как точку отсчёта — и рассчитываем вашу выгоду без манипуляций. Вы сами принимаете решение.</div></div>
+      </div>
+      <div class="principle">
+        <div class="icon-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#121A12" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+        <div><div class="p-title">Уважение к времени</div><div class="p-text">Каждый слот — это конкретная минута, которую салон иначе потеряет. Мы не растягиваем выбор: таймер, цена, действие. Ваше время стоит ровно столько, сколько вы решаете потратить.</div></div>
+      </div>
+      <div class="principle">
+        <div class="icon-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#121A12" stroke-width="1.5" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+        <div><div class="p-title">Честная технологичность</div><div class="p-text">Предоплата удерживается платформой до подтверждения визита. Если что-то пошло не так — деньги возвращаются в течение 24 часов. Никаких исключений.</div></div>
+      </div>
+      <div class="divider"></div>
+      <div class="signature">
+        <p>Если появятся вопросы — просто ответьте на это письмо.<br>Мы читаем каждое.</p>
+        <br>
+        <p><strong style="color:#121A12;">Команда «Лови»</strong><br>
+        <span style="font-size:13px;color:#8F8475;">lovi.today · Москва</span></p>
+      </div>
+    </div>
+    <div class="footer">
+      <div class="footer-text">
+        Вы получили это письмо, потому что зарегистрировались на <a href="https://lovi.today">lovi.today</a>.<br>
+        <a href="https://lovi.today/unsubscribe?email={email}">Отписаться</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>"""
+    resend.Emails.send({
+        "from": "«Лови» <noreply@lovi.today>",
+        "to": email,
+        "subject": "Добро пожаловать в «Лови»",
+        "html": html,
+    })
+
 @router.post("/register")
 async def register(data: RegisterIn):
     existing = supabase.table("users").select("id").eq("email", data.email).execute()
@@ -43,6 +127,10 @@ async def register(data: RegisterIn):
     }).execute()
     user = res.data[0]
     token = make_token(user["id"], user["email"])
+    try:
+        send_welcome_email(user["name"], user["email"])
+    except Exception:
+        pass  # не блокируем регистрацию если письмо не ушло
     return {"token": token, "user": {"id": user["id"], "name": user["name"], "email": user["email"]}}
 
 @router.post("/login")
@@ -54,6 +142,10 @@ async def login(data: LoginIn):
     if not check_password(data.password, user["password_hash"]):
         raise HTTPException(401, "Неверный email или пароль")
     token = make_token(user["id"], user["email"])
+    try:
+        send_welcome_email(user["name"], user["email"])
+    except Exception:
+        pass  # не блокируем регистрацию если письмо не ушло
     return {"token": token, "user": {"id": user["id"], "name": user["name"], "email": user["email"]}}
 
 # ─── My Bookings ───────────────────────────────────────────────────────────────
@@ -111,16 +203,34 @@ class ResetIn(BaseModel):
     password: str
 
 @router.post("/forgot-password")
-async def forgot_password(data: ForgotIn):
+async def forgot_password(data: ForgotIn, request: Request):
+    ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown")
+    ua = request.headers.get("user-agent", "")
     res = supabase.table("users").select("id,name,email").eq("email", data.email).execute()
     # Всегда возвращаем 200 — не раскрываем существование email
     if not res.data:
+        supabase.table("auth_events").insert({
+            "event_type": "forgot_password_unknown_email",
+            "email": data.email,
+            "ip": ip,
+            "user_agent": ua,
+            "success": False,
+            "meta": {"reason": "email not found"}
+        }).execute()
         return {"ok": True}
     user = res.data[0]
     token = secrets.token_urlsafe(32)
     expires = (datetime.utcnow() + timedelta(hours=2)).isoformat()
     supabase.table("password_reset_tokens").insert({
         "user_id": user["id"], "token": token, "expires_at": expires
+    }).execute()
+    supabase.table("auth_events").insert({
+        "event_type": "forgot_password_sent",
+        "email": data.email,
+        "ip": ip,
+        "user_agent": ua,
+        "success": True,
+        "meta": {"user_id": user["id"]}
     }).execute()
     reset_url = f"{LOVI_BASE_URL}/reset-password?token={token}"
     resend.Emails.send({

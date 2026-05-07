@@ -95,3 +95,62 @@ async def rate_booking(data: RatingIn, authorization: str = Header(...)):
         "review_text": data.review_text,
     }).eq("id", data.booking_id).execute()
     return {"ok": True}
+
+# ─── Password Reset ────────────────────────────────────────────────────────────
+import resend, secrets
+from datetime import timezone
+
+resend.api_key = os.getenv("RESEND_API_KEY")
+LOVI_BASE_URL = os.getenv("LOVI_BASE_URL", "https://lovi-web.onrender.com")
+
+class ForgotIn(BaseModel):
+    email: EmailStr
+
+class ResetIn(BaseModel):
+    token: str
+    password: str
+
+@router.post("/forgot-password")
+async def forgot_password(data: ForgotIn):
+    res = supabase.table("users").select("id,name,email").eq("email", data.email).execute()
+    # Всегда возвращаем 200 — не раскрываем существование email
+    if not res.data:
+        return {"ok": True}
+    user = res.data[0]
+    token = secrets.token_urlsafe(32)
+    expires = (datetime.utcnow() + timedelta(hours=2)).isoformat()
+    supabase.table("password_reset_tokens").insert({
+        "user_id": user["id"], "token": token, "expires_at": expires
+    }).execute()
+    reset_url = f"{LOVI_BASE_URL}/reset-password?token={token}"
+    resend.Emails.send({
+        "from": "Lovi <noreply@lovi.today>",
+        "to": user["email"],
+        "subject": "Сброс пароля Lovi",
+        "html": f"""
+        <div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#FDFCF9;">
+          <div style="font-size:22px;font-weight:700;color:#121A12;margin-bottom:8px;font-family:Georgia,serif;">Лови</div>
+          <p style="font-size:15px;color:#121A12;margin:24px 0 8px;">Привет, {user['name']}!</p>
+          <p style="font-size:14px;color:#8F8475;line-height:1.6;margin:0 0 24px;">Вы запросили сброс пароля. Ссылка действительна 2 часа.</p>
+          <a href="{reset_url}" style="display:inline-block;background:#121A12;color:#fff;text-decoration:none;padding:14px 28px;border-radius:12px;font-size:14px;font-weight:600;">Сбросить пароль</a>
+          <p style="font-size:12px;color:#8F8475;margin-top:24px;line-height:1.6;">Если вы не запрашивали сброс — просто проигнорируйте это письмо.</p>
+        </div>
+        """,
+    })
+    return {"ok": True}
+
+@router.post("/reset-password")
+async def reset_password(data: ResetIn):
+    res = supabase.table("password_reset_tokens").select("*").eq("token", data.token).execute()
+    if not res.data:
+        raise HTTPException(400, "Недействительная ссылка")
+    rec = res.data[0]
+    if rec["used"]:
+        raise HTTPException(400, "Ссылка уже использована")
+    expires = datetime.fromisoformat(rec["expires_at"].replace("Z", "+00:00"))
+    if datetime.now(timezone.utc) > expires:
+        raise HTTPException(400, "Ссылка истекла")
+    hashed = hash_password(data.password)
+    supabase.table("users").update({"password_hash": hashed}).eq("id", rec["user_id"]).execute()
+    supabase.table("password_reset_tokens").update({"used": True}).eq("token", data.token).execute()
+    return {"ok": True}

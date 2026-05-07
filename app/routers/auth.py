@@ -67,7 +67,7 @@ def send_welcome_email(name: str, email: str):
 <body>
   <div class="wrapper">
     <div class="header">
-      <img src="https://lovi.today/logo.svg" alt="«Лови»" height="26" style="display:block;">
+      <img src="https://lovi.today/logo_w.svg" alt="«Лови»" height="26" style="display:block;">
     </div>
     <div class="body">
       <div class="greeting">{name}, вы в «Лови»</div>
@@ -76,7 +76,7 @@ def send_welcome_email(name: str, email: str):
         <div class="cta-label">Доступно сейчас</div>
         <div class="cta-title">Слоты на сегодня открыты</div>
         <div class="cta-sub">Цена каждого слота — реальная стоимость в салоне как точка отсчёта.<br>Выгода рассчитывается автоматически, исходя из времени до начала.</div>
-        <a href="https://lovi.today" class="cta-btn">Смотреть доступные окошки →</a>
+        <a href="https://lovi.today" class="cta-btn">Смотреть окошки</a>
       </div>
       <div class="principle">
         <div class="icon-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#121A12" stroke-width="1.5" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>

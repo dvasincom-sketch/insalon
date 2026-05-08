@@ -46,6 +46,7 @@ def get_strategy(service_id: int, company_id: int = COMPANY_ID) -> DynamicDiscou
         .select("*") \
         .eq("company_id", company_id) \
         .eq("service_id", service_id) \
+        .eq("status", "published") \
         .execute()
     if res.data:
         row = res.data[0]
@@ -312,7 +313,7 @@ async def get_strategies(company_id: int = Query(COMPANY_ID)):
 async def update_strategy(service_id: int, data: dict = Body(...)):
     """Dashboard — обновить стратегию для услуги."""
     company_id = data.get("company_id", COMPANY_ID)
-    allowed = {"threshold_far", "threshold_near", "coeff_far", "coeff_near", "coeff_hot", "strategy_name"}
+    allowed = {"threshold_far", "threshold_near", "coeff_far", "coeff_near", "coeff_hot", "strategy_name", "status"}
     update = {k: v for k, v in data.items() if k in allowed}
     if not update:
         raise HTTPException(400, "Нет полей для обновления")

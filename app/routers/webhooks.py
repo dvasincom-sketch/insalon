@@ -28,3 +28,16 @@ async def webhook_disconnect(request: Request):
     if company_id:
         await deactivate_salon(company_id)
     return {"status": "ok"}
+
+@router.post(
+    "/lovi/disconnect",
+    summary="Отключение Lovi приложения",
+    description="YCLIENTS отправляет сюда уведомление когда салон отключает приложение Lovi из маркетплейса."
+)
+async def webhook_lovi_disconnect(request: Request):
+    body = await request.json()
+    company_id = body.get("company_id")
+    print(f"=== Lovi Disconnect: компания {company_id} ===")
+    if company_id:
+        await deactivate_salon(company_id)
+    return {"status": "ok"}

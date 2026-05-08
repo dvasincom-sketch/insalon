@@ -103,9 +103,65 @@ async def yookassa_webhook(request: Request):
         return JSONResponse({"ok": True})
 
     if event == "payment.succeeded":
-        supabase.table("bookings").update({"status": "paid"}).eq("id", booking_id).execute()
+        supabase.table("bookings").update({"status": "confirmed"}).eq("id", booking_id).execute()
         print(f"[PAYMENT] Оплачено booking_id={booking_id}")
         _send_booking_email("booking_confirmed", "Окошко закреплено — «Лови»", booking_id)
+
+        # Создаём запись в YCLIENTS после успешной оплаты
+        try:
+            booking = supabase.table("bookings").select("*").eq("id", booking_id).single().execute().data
+            salon = supabase.table("salons").select("user_token").eq("company_id", booking["company_id"]).single().execute().data
+            token = salon.get("user_token", "")
+            if token and booking.get("service_id") and booking.get("master_id"):
+                from app.yclients import create_record, create_client, find_client_by_phone
+                import re
+
+                raw_phone = booking.get("client_phone", "")
+                normalized = "+" + re.sub(r"\D", "", raw_phone)
+                if normalized.startswith("+8"):
+                    normalized = "+7" + normalized[2:]
+
+                yclients_client_id = None
+                try:
+                    existing = await create_client(
+                        booking["company_id"], token,
+                        name=booking.get("client_name", ""),
+                        phone=normalized,
+                        email=booking.get("client_email", "")
+                    )
+                    if existing and existing.get("success"):
+                        yclients_client_id = existing.get("data", {}).get("id")
+                    if not yclients_client_id:
+                        found = await find_client_by_phone(booking["company_id"], token, normalized)
+                        if found:
+                            yclients_client_id = found.get("id")
+                except Exception as e:
+                    print(f"[PAYMENT] client error: {e}")
+
+                dt = booking.get("datetime", "").replace(" ", "T")
+                record_data = {
+                    "staff_id": booking["master_id"],
+                    "services": [{"id": booking["service_id"]}],
+                    "client": {"id": yclients_client_id} if yclients_client_id else {
+                        "name": booking.get("client_name", ""),
+                        "phone": normalized,
+                    },
+                    "datetime": dt,
+                    "seance_length": booking.get("duration", 3600),
+                    "comment": f"{'lovi.today' if booking.get('source') == 'lovi' else 'insalon'} | booking_id={booking_id}",
+                }
+                result = await create_record(booking["company_id"], token, record_data)
+                print(f"[PAYMENT] YCLIENTS result: {result.get('success')} id={result.get('data', {}).get('id')}")
+                if result.get("success"):
+                    supabase.table("bookings").update({
+                        "yclients_record_id": result["data"]["id"],
+                    }).eq("id", booking_id).execute()
+                else:
+                    supabase.table("bookings").update({
+                        "yclients_sync_error": result.get("meta", {}).get("message", "unknown")
+                    }).eq("id", booking_id).execute()
+        except Exception as e:
+            print(f"[PAYMENT] YCLIENTS exception: {e}")
 
     elif event in ("payment.canceled",):
         supabase.table("bookings").update({"status": "cancelled"}).eq("id", booking_id).execute()

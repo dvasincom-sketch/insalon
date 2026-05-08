@@ -163,12 +163,13 @@ async def get_featured(date: str = Query(None)):
     async def fetch_slots_for_date(fetch_date: str) -> list:
         results = []
         now_ts = datetime.now(tz=timezone.utc).timestamp()
-        for svc in featured_services:
+        async def fetch_one(svc):
             try:
                 slots_resp = await get_book_times(COMPANY_ID, token, fetch_date, svc["id"])
             except Exception as e:
                 print(f"[FEATURED] timeout for service {svc['id']}: {e}")
-                continue
+                return []
+            items = []
             for slot in slots_resp.get("data", [])[:2]:
                 slot_dt = datetime.fromisoformat(slot["datetime"])
                 if slot_dt.timestamp() - now_ts < 3600:
@@ -177,7 +178,7 @@ async def get_featured(date: str = Query(None)):
                 strategy, strategy_type = get_strategy(svc["id"], is_weekend)
                 pricing = get_lovi_price(base_price, slot_dt, strategy)
                 if pricing:
-                    results.append({
+                    items.append({
                         "time": slot["time"],
                         "datetime": slot["datetime"],
                         "slot_date": fetch_date,
@@ -189,6 +190,12 @@ async def get_featured(date: str = Query(None)):
                         "tag": None,
                         **pricing,
                     })
+            return items
+
+        import asyncio
+        all_results = await asyncio.gather(*[fetch_one(svc) for svc in featured_services])
+        for items in all_results:
+            results.extend(items)
         results.sort(key=lambda x: x["datetime"])
         return results[:8]
 

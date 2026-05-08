@@ -417,7 +417,7 @@ async def lovi_connect(data: dict = Body(...)):
 
     supabase.table("salons").upsert({
         "company_id": int(salon_id),
-        "user_token": None,
+        "user_token": "",
     }, on_conflict="company_id").execute()
 
     return {"ok": True}

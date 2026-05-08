@@ -500,18 +500,26 @@ async def salon_me(authorization: str = Header(...)):
     token = salon.get("user_token", "")
     if token:
         try:
-            check = await get_book_times(company_id, token, datetime.utcnow().strftime("%Y-%m-%d"), 19658183)
-            token_ok = check is not None
+            import httpx, os
+            partner_token = os.getenv("YCLIENTS_PARTNER_TOKEN", "").strip()
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.get(
+                    f"https://api.yclients.com/api/v1/company/{company_id}",
+                    headers={
+                        "Authorization": f"Bearer {partner_token}, User {token}",
+                        "Accept": "application/vnd.api.v2+json"
+                    }
+                )
+            token_ok = resp.status_code == 200 and resp.json().get("success") is True
         except:
             token_ok = False
         new_status = "ok" if token_ok else "error"
-        if new_status != salon.get("token_status"):
-            supabase.table("salons").update({
-                "token_status": new_status,
-                "last_sync_at": datetime.utcnow().isoformat(),
-            }).eq("company_id", company_id).execute()
-            salon["token_status"] = new_status
-            salon["last_sync_at"] = datetime.utcnow().isoformat()
+        supabase.table("salons").update({
+            "token_status": new_status,
+            "last_sync_at": datetime.utcnow().isoformat(),
+        }).eq("company_id", company_id).execute()
+        salon["token_status"] = new_status
+        salon["last_sync_at"] = datetime.utcnow().isoformat()
     else:
         salon["token_status"] = "no_token"
 

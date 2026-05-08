@@ -41,3 +41,8 @@ async def webhook_lovi_disconnect(request: Request):
     if company_id:
         await deactivate_salon(company_id)
     return {"status": "ok"}
+
+
+@router.get("/lovi/disconnect")
+async def webhook_lovi_disconnect_get():
+    return {"status": "ok", "info": "This endpoint accepts POST requests from YCLIENTS"}

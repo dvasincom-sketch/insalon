@@ -494,7 +494,28 @@ async def salon_me(authorization: str = Header(...)):
     res = supabase.table("salons").select("*").eq("company_id", company_id).single().execute()
     if not res.data:
         raise HTTPException(404, "Салон не найден")
-    return res.data
+    salon = res.data
+
+    # Health-check токена YCLIENTS
+    token = salon.get("user_token", "")
+    if token:
+        try:
+            check = await get_book_times(company_id, token, datetime.utcnow().strftime("%Y-%m-%d"), 19658183)
+            token_ok = check is not None
+        except:
+            token_ok = False
+        new_status = "ok" if token_ok else "error"
+        if new_status != salon.get("token_status"):
+            supabase.table("salons").update({
+                "token_status": new_status,
+                "last_sync_at": datetime.utcnow().isoformat(),
+            }).eq("company_id", company_id).execute()
+            salon["token_status"] = new_status
+            salon["last_sync_at"] = datetime.utcnow().isoformat()
+    else:
+        salon["token_status"] = "no_token"
+
+    return salon
 
 
 # ── Salon Magic Link ───────────────────────────────────────────────────────────

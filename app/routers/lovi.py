@@ -164,7 +164,11 @@ async def get_featured(date: str = Query(None)):
         results = []
         now_ts = datetime.now(tz=timezone.utc).timestamp()
         for svc in featured_services:
-            slots_resp = await get_book_times(COMPANY_ID, token, fetch_date, svc["id"])
+            try:
+                slots_resp = await get_book_times(COMPANY_ID, token, fetch_date, svc["id"])
+            except Exception as e:
+                print(f"[FEATURED] timeout for service {svc['id']}: {e}")
+                continue
             for slot in slots_resp.get("data", [])[:2]:
                 slot_dt = datetime.fromisoformat(slot["datetime"])
                 if slot_dt.timestamp() - now_ts < 3600:

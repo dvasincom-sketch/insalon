@@ -108,10 +108,16 @@ async def yookassa_webhook(request: Request):
         _send_booking_email("booking_confirmed", "Окошко закреплено — «Лови»", booking_id)
 
         # Создаём запись в YCLIENTS после успешной оплаты
+        print(f"[PAYMENT] Начинаем создание записи в YCLIENTS для booking_id={booking_id}")
         try:
+            print("[PAYMENT] step 1: получаем booking")
             booking = supabase.table("bookings").select("*").eq("id", booking_id).single().execute().data
+            print(f"[PAYMENT] step 2: booking={booking is not None}, company_id={booking.get('company_id') if booking else None}")
+            print("[PAYMENT] step 3: получаем salon")
             salon = supabase.table("salons").select("user_token").eq("company_id", booking["company_id"]).single().execute().data
-            token = salon.get("user_token", "")
+            print(f"[PAYMENT] step 4: salon={salon is not None}, token_len={len(salon.get('user_token','')) if salon else 0}")
+            token = salon.get("user_token", "") if salon else ""
+            print(f"[PAYMENT] step 5: token={bool(token)}, service_id={booking.get('service_id')}, master_id={booking.get('master_id')}")
             if token and booking.get("service_id") and booking.get("master_id"):
                 from app.yclients import create_record, create_client, find_client_by_phone
                 import re
@@ -161,7 +167,9 @@ async def yookassa_webhook(request: Request):
                         "yclients_sync_error": result.get("meta", {}).get("message", "unknown")
                     }).eq("id", booking_id).execute()
         except Exception as e:
+            import traceback
             print(f"[PAYMENT] YCLIENTS exception: {e}")
+            print(traceback.format_exc())
 
     elif event in ("payment.canceled",):
         supabase.table("bookings").update({"status": "cancelled"}).eq("id", booking_id).execute()

@@ -420,9 +420,11 @@ async def lovi_connect(data: dict = Body(...)):
     if not salon_id:
         raise HTTPException(400, "salon_id обязателен")
 
+    existing = supabase.table("salons").select("user_token").eq("company_id", int(salon_id)).execute()
+    existing_token = existing.data[0]["user_token"] if existing.data else ""
     res = supabase.table("salons").upsert({
         "company_id": int(salon_id),
-        "user_token": "",
+        "user_token": existing_token or "",
         "yclients_user_id": str(user_info.get("id", "")),
         "owner_name": user_info.get("name", ""),
         "owner_phone": user_info.get("phone", ""),

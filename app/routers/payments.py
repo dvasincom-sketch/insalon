@@ -136,11 +136,28 @@ async def yookassa_webhook(request: Request):
                     dt = dt_raw + "+03:00"
                 else:
                     dt = dt_raw
+                # Берём длительность из YCLIENTS
+                seance_length = booking.get("duration", 3600)
+                try:
+                    import httpx as _httpx
+                    partner_token = os.getenv("YCLIENTS_PARTNER_TOKEN", "").strip()
+                    async with _httpx.AsyncClient(timeout=5) as _client:
+                        _r = await _client.get(
+                            f"https://api.yclients.com/api/v1/services/{booking['company_id']}/{booking['service_id']}",
+                            headers={"Authorization": f"Bearer {partner_token}, User {token}", "Accept": "application/vnd.api.v2+json"}
+                        )
+                        _svc = _r.json().get("data", {})
+                        if _svc.get("duration"):
+                            seance_length = _svc["duration"]
+                except Exception as e:
+                    print(f"[PAYMENT] service duration fetch error: {e}")
+                print(f"[PAYMENT] seance_length={seance_length}")
                 record_data = {
                     "staff_id": booking["master_id"],
                     "services": [{"id": booking["service_id"]}],
                     "client": {"id": system_client_id},
                     "datetime": dt,
+                    "seance_length": seance_length,
                     "comment": f"{'lovi.today' if source == 'lovi' else 'insalon'} | {booking.get('client_name','')} {normalized} | booking_id={booking_id}",
                 }
                 result = await create_record(booking["company_id"], token, record_data)

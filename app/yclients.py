@@ -129,14 +129,13 @@ def find_client_by_phone_sync(company_id: int, user_token: str, phone: str):
         response = client.get(
             f"{BASE_URL}/clients/{company_id}",
             headers=get_auth_headers(user_token),
-            params={"fields": "id,name,phone", "count": 200}
+            params={"fields": "id,name,phone", "phone": phone, "count": 50}
         )
         data = response.json()
+        print(f"[YCLIENTS] find_client_by_phone phone={phone} result={data.get('meta')}")
         clients = data.get("data", [])
-        # Ищем по точному совпадению телефона
-        for c in clients:
-            if c.get("phone", "").replace(" ", "") == phone.replace(" ", ""):
-                return c
+        if clients:
+            return clients[0]
         return None
 
 async def find_client_by_phone(company_id: int, user_token: str, phone: str):

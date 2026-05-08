@@ -502,24 +502,40 @@ async def salon_me(authorization: str = Header(...)):
         try:
             import httpx, os
             partner_token = os.getenv("YCLIENTS_PARTNER_TOKEN", "").strip()
+            from datetime import date as dt_date
+            today = dt_date.today().isoformat()
             async with httpx.AsyncClient(timeout=5) as client:
                 resp = await client.get(
-                    f"https://api.yclients.com/api/v1/company/{company_id}",
+                    f"https://api.yclients.com/api/v1/records/{company_id}",
+                    params={"start_date": today, "end_date": today, "count": 1},
                     headers={
                         "Authorization": f"Bearer {partner_token}, User {token}",
                         "Accept": "application/vnd.api.v2+json"
                     }
                 )
-            token_ok = resp.status_code == 200 and resp.json().get("success") is True
-        except:
-            token_ok = False
-        new_status = "ok" if token_ok else "error"
+            data = resp.json()
+            if resp.status_code == 200 and data.get("success"):
+                new_status = "ok"
+                status_message = None
+            else:
+                msg = data.get("meta", {}).get("message", "")
+                if "прав" in msg.lower():
+                    new_status = "no_access"
+                    status_message = msg
+                else:
+                    new_status = "error"
+                    status_message = msg
+        except Exception as e:
+            new_status = "error"
+            status_message = str(e)
         supabase.table("salons").update({
             "token_status": new_status,
             "last_sync_at": datetime.utcnow().isoformat(),
         }).eq("company_id", company_id).execute()
         salon["token_status"] = new_status
         salon["last_sync_at"] = datetime.utcnow().isoformat()
+        if status_message:
+            salon["token_status_message"] = status_message
     else:
         salon["token_status"] = "no_token"
 

@@ -656,27 +656,24 @@ async def cancel_booking(booking_id: int, authorization: str = Header(...)):
 
     # Отменяем запись в YCLIENTS если есть record_id
     yclients_cancelled = False
-    if booking.get("yclients_record_id") and booking.get("yclients_record_hash"):
+    if booking.get("yclients_record_id"):
         try:
             import httpx
             partner_token = os.getenv("YCLIENTS_PARTNER_TOKEN", "").strip()
-            salon = supabase.table("salons").select("user_token")\
-                .eq("company_id", booking["company_id"]).single().execute().data
+            salon = supabase.table("salons").select("user_token")                .eq("company_id", booking["company_id"]).single().execute().data
             async with httpx.AsyncClient(timeout=5) as client:
                 resp = await client.delete(
                     f"https://api.yclients.com/api/v1/record/{booking['company_id']}/{booking['yclients_record_id']}",
-                    params={"record_hash": booking["yclients_record_hash"]},
                     headers={
                         "Authorization": f"Bearer {partner_token}, User {salon['user_token']}",
                         "Accept": "application/vnd.api.v2+json"
                     }
                 )
             yclients_cancelled = resp.status_code == 200
-            print(f"[CANCEL] YCLIENTS: {resp.status_code} {resp.text}")
+            print(f"[CANCEL] YCLIENTS: {resp.status_code}")
         except Exception as e:
             print(f"[CANCEL] YCLIENTS error: {e}")
-
-    # Обновляем статус брони
+        # Обновляем статус брони
     supabase.table("bookings").update({
         "status": "cancelled_by_client"
     }).eq("id", booking_id).execute()

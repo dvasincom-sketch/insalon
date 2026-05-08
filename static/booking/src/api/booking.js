@@ -37,6 +37,6 @@ export async function getNearestSlot(duration, serviceId = 0) {
 }
 
 export async function getBooking(bookingId) {
-  const r = await fetch(`${API}/api/booking/booking/${bookingId}`);
+  const r = await fetch(`${API}/api/booking/${bookingId}`);
   return r.json();
 }

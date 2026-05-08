@@ -418,8 +418,6 @@ async def lovi_connect(data: dict = Body(...)):
     supabase.table("salons").upsert({
         "company_id": int(salon_id),
         "user_token": None,
-        "yclients_user_id": str(user_info.get("id", "")),
-        "connected_via": "lovi_marketplace",
     }, on_conflict="company_id").execute()
 
     return {"ok": True}

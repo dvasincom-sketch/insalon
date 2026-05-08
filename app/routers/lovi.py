@@ -408,16 +408,18 @@ async def city_partner_request(data: dict = Body(...)):
 
 @router.post("/connect")
 async def lovi_connect(data: dict = Body(...)):
-    """OAuth callback — салон подключил приложение Lovi из маркетплейса YCLIENTS"""
-    user_token = data.get("user_token")
-    company_id = data.get("company_id")
+    """Салон подключил приложение Lovi из маркетплейса YCLIENTS"""
+    salon_id = data.get("salon_id")
+    user_info = data.get("user_info", {})
 
-    if not user_token or not company_id:
-        raise HTTPException(400, "user_token и company_id обязательны")
+    if not salon_id:
+        raise HTTPException(400, "salon_id обязателен")
 
     supabase.table("salons").upsert({
-        "company_id": int(company_id),
-        "user_token": user_token,
+        "company_id": int(salon_id),
+        "user_token": None,
+        "yclients_user_id": str(user_info.get("id", "")),
+        "connected_via": "lovi_marketplace",
     }, on_conflict="company_id").execute()
 
     return {"ok": True}

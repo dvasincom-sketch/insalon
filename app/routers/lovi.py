@@ -313,7 +313,7 @@ async def get_strategies(company_id: int = Query(COMPANY_ID)):
 async def update_strategy(service_id: int, data: dict = Body(...)):
     """Dashboard — обновить стратегию для услуги."""
     company_id = data.get("company_id", COMPANY_ID)
-    allowed = {"threshold_far", "threshold_near", "coeff_far", "coeff_near", "coeff_hot", "strategy_name", "status"}
+    allowed = {"threshold_far", "threshold_near", "coeff_far", "coeff_near", "coeff_hot", "strategy_name", "status", "category", "display_order"}
     update = {k: v for k, v in data.items() if k in allowed}
     if not update:
         raise HTTPException(400, "Нет полей для обновления")

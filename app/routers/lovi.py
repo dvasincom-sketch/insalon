@@ -244,6 +244,7 @@ async def lovi_book(data: dict = Body(...)):
         "client_email": data.get("client_email", ""),
         "user_id": data.get("user_id") or None,
         "status": "pending",
+        "source": "lovi",
     }
     # Генерируем непредсказуемый код брони
     _secret = os.getenv("BOOKING_CODE_SECRET", "lovi-secret-2026")

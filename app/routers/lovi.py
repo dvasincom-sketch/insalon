@@ -622,3 +622,117 @@ async def salon_auth_by_token(token: str):
         secret, algorithm="HS256"
     )
     return {"ok": True, "token": jwt_token, "salon": salon}
+
+
+# ── Cancel Booking ─────────────────────────────────────────────────────────────
+
+@router.post("/bookings/{booking_id}/cancel")
+async def cancel_booking(booking_id: int, authorization: str = Header(...)):
+    """Отмена бронирования клиентом — возврат на баланс Lovi"""
+    from jose import jwt as jose_jwt, JWTError
+    import os
+
+    # Авторизация клиента
+    try:
+        token = authorization.replace("Bearer ", "")
+        secret = os.getenv("JWT_SECRET", "lovi-secret-change-in-prod")
+        payload = jose_jwt.decode(token, secret, algorithms=["HS256"])
+        user_id = int(payload["sub"])
+    except (JWTError, KeyError):
+        raise HTTPException(401, "Невалидный токен")
+
+    # Получаем бронь
+    res = supabase.table("bookings").select("*").eq("id", booking_id).execute()
+    if not res.data:
+        raise HTTPException(404, "Бронь не найдена")
+    booking = res.data[0]
+
+    # Проверяем владельца
+    if booking.get("user_id") != user_id:
+        raise HTTPException(403, "Нет доступа")
+
+    # Проверяем статус
+    if booking["status"] not in ("confirmed", "waiting_payment", "pending"):
+        raise HTTPException(400, f"Нельзя отменить бронь со статусом {booking['status']}")
+
+    # Проверяем время — минимум 2 часа до визита
+    from datetime import timezone
+    slot_dt = datetime.fromisoformat(booking["datetime"])
+    if slot_dt.tzinfo is None:
+        slot_dt = slot_dt.replace(tzinfo=timezone.utc)
+    hours_before = (slot_dt - datetime.now(tz=timezone.utc)).total_seconds() / 3600
+    if hours_before < 2:
+        raise HTTPException(400, "Отмена невозможна менее чем за 2 часа до визита")
+
+    # Отменяем запись в YCLIENTS если есть record_id
+    yclients_cancelled = False
+    if booking.get("yclients_record_id") and booking.get("yclients_record_hash"):
+        try:
+            import httpx
+            partner_token = os.getenv("YCLIENTS_PARTNER_TOKEN", "").strip()
+            salon = supabase.table("salons").select("user_token")\
+                .eq("company_id", booking["company_id"]).single().execute().data
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.delete(
+                    f"https://api.yclients.com/api/v1/record/{booking['company_id']}/{booking['yclients_record_id']}",
+                    params={"record_hash": booking["yclients_record_hash"]},
+                    headers={
+                        "Authorization": f"Bearer {partner_token}, User {salon['user_token']}",
+                        "Accept": "application/vnd.api.v2+json"
+                    }
+                )
+            yclients_cancelled = resp.status_code == 200
+            print(f"[CANCEL] YCLIENTS: {resp.status_code} {resp.text}")
+        except Exception as e:
+            print(f"[CANCEL] YCLIENTS error: {e}")
+
+    # Обновляем статус брони
+    supabase.table("bookings").update({
+        "status": "cancelled_by_client"
+    }).eq("id", booking_id).execute()
+
+    # Возврат на баланс Lovi
+    refund_amount = booking.get("total_price", 0)
+    supabase.table("balance_transactions").insert({
+        "user_id": user_id,
+        "booking_id": booking_id,
+        "amount": refund_amount * 100,
+        "type": "refund",
+    }).execute()
+    # Обновляем баланс пользователя
+    user_res = supabase.table("users").select("lovi_balance").eq("id", user_id).single().execute()
+    current_balance = user_res.data.get("lovi_balance", 0) or 0
+    supabase.table("users").update({
+        "lovi_balance": current_balance + refund_amount
+    }).eq("id", user_id).execute()
+
+    # Email клиенту
+    try:
+        import resend as _resend
+        from app.emails.utils import render_template
+        _resend.api_key = os.getenv("RESEND_API_KEY")
+        if booking.get("client_email"):
+            html = render_template(
+                template="booking_cancelled",
+                subject="Бронирование отменено",
+                email=booking["client_email"],
+                client_name=booking.get("client_name", ""),
+                service_title=booking.get("service_title", ""),
+                datetime=str(booking.get("datetime", "")),
+            )
+            _resend.Emails.send({
+                "from": "«Лови» <noreply@lovi.today>",
+                "to": booking["client_email"],
+                "subject": "Бронирование отменено — средства возвращены на баланс",
+                "html": html,
+            })
+    except Exception as e:
+        import logging
+        logging.error(f"cancel email error: {e}")
+
+    return {
+        "ok": True,
+        "refunded": refund_amount,
+        "new_balance": current_balance + refund_amount,
+        "yclients_cancelled": yclients_cancelled,
+    }

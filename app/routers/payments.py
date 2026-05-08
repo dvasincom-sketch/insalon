@@ -127,41 +127,25 @@ async def yookassa_webhook(request: Request):
                 if normalized.startswith("+8"):
                     normalized = "+7" + normalized[2:]
 
-                yclients_client_id = None
-                try:
-                    existing = await create_client(
-                        booking["company_id"], token,
-                        name=booking.get("client_name", ""),
-                        phone=normalized,
-                        email=booking.get("client_email", "")
-                    )
-                    if existing and existing.get("success"):
-                        yclients_client_id = existing.get("data", {}).get("id")
-                    if not yclients_client_id:
-                        found = await find_client_by_phone(booking["company_id"], token, normalized)
-                        if found:
-                            yclients_client_id = found.get("id")
-                except Exception as e:
-                    print(f"[PAYMENT] client error: {e}")
-
+                # Используем системного клиента Lovi
+                system_client_id = int(os.getenv("LOVI_SYSTEM_CLIENT_ID", "396205299"))
+                source = booking.get("source", "insalon")
                 dt = booking.get("datetime", "").replace(" ", "T")
                 record_data = {
                     "staff_id": booking["master_id"],
                     "services": [{"id": booking["service_id"]}],
-                    "client": {"id": yclients_client_id} if yclients_client_id else {
-                        "name": booking.get("client_name", ""),
-                        "phone": normalized,
-                    },
+                    "client": {"id": system_client_id},
                     "datetime": dt,
                     "seance_length": booking.get("duration", 3600),
-                    "comment": f"{'lovi.today' if booking.get('source') == 'lovi' else 'insalon'} | booking_id={booking_id}",
+                    "comment": f"{'lovi.today' if source == 'lovi' else 'insalon'} | {booking.get('client_name','')} {normalized} | booking_id={booking_id}",
                 }
                 result = await create_record(booking["company_id"], token, record_data)
-                print(f"[PAYMENT] YCLIENTS result: {result.get('success')} id={result.get('data', {}).get('id')}")
-                if result.get("success"):
+                print(f"[PAYMENT] YCLIENTS result: {result}")
+                if result and result.get("success"):
                     supabase.table("bookings").update({
                         "yclients_record_id": result["data"]["id"],
                     }).eq("id", booking_id).execute()
+                    print(f"[PAYMENT] Запись создана id={result['data']['id']}")
                 else:
                     supabase.table("bookings").update({
                         "yclients_sync_error": result.get("meta", {}).get("message", "unknown")

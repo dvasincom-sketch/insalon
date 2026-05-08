@@ -331,6 +331,92 @@ async def update_strategy(service_id: int, data: dict = Body(...)):
 
 # ── Book ───────────────────────────────────────────────────────────────────
 
+
+# ── Sync Services ──────────────────────────────────────────────────────────────
+
+YCLIENTS_CATEGORY_MAP = {
+    27323178: "spa",
+    19468178: "head",
+    19658180: "back",
+    27461844: "spa",
+}
+
+EXCLUDED_SERVICE_IDS = {22296048, 22296054, 22296057}
+
+@router.post("/sync-services")
+async def sync_services(authorization: str = Header(...)):
+    """Синхронизация услуг из YCLIENTS в Supabase service_strategies"""
+    import os, httpx
+    company_id = get_salon_id(authorization)
+
+    salon = supabase.table("salons").select("user_token").eq("company_id", company_id).single().execute().data
+    token = salon["user_token"]
+    partner_token = os.getenv("YCLIENTS_PARTNER_TOKEN", "").strip()
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(
+            f"https://api.yclients.com/api/v1/services/{company_id}",
+            headers={
+                "Authorization": f"Bearer {partner_token}, User {token}",
+                "Accept": "application/vnd.api.v2+json"
+            }
+        )
+
+    if r.status_code != 200:
+        raise HTTPException(502, f"YCLIENTS error: {r.status_code}")
+
+    services = r.json().get("data") or []
+
+    # Фильтруем по whitelist категорий и исключаем архивные
+    filtered = [
+        s for s in services
+        if s.get("category_id") in YCLIENTS_CATEGORY_MAP
+        and s.get("id") not in EXCLUDED_SERVICE_IDS
+    ]
+
+    # Получаем существующие записи чтобы не перезаписывать настройки
+    existing_res = supabase.table("service_strategies")         .select("service_id, status, strategy_name, threshold_far, threshold_near, coeff_far, coeff_near, coeff_hot")         .eq("company_id", company_id).execute()
+    existing = {row["service_id"]: row for row in existing_res.data}
+
+    added = []
+    skipped = []
+
+    for svc in filtered:
+        sid = svc["id"]
+        category = YCLIENTS_CATEGORY_MAP[svc["category_id"]]
+
+        if sid in existing:
+            # Обновляем только service_name и category — не трогаем стратегию
+            supabase.table("service_strategies").update({
+                "service_name": svc["title"],
+                "category": category,
+            }).eq("company_id", company_id).eq("service_id", sid).execute()
+            skipped.append(sid)
+        else:
+            # Новая услуга — добавляем с дефолтной step стратегией и статусом draft
+            supabase.table("service_strategies").insert({
+                "company_id":     company_id,
+                "service_id":     sid,
+                "service_name":   svc["title"],
+                "category":       category,
+                "strategy_name":  "step",
+                "status":         "draft",
+                "display_order":  0,
+                "threshold_far":  24,
+                "threshold_near": 1,
+                "coeff_far":      0.90,
+                "coeff_near":     0.85,
+                "coeff_hot":      0.60,
+            }).execute()
+            added.append(sid)
+
+    return {
+        "ok": True,
+        "added": len(added),
+        "updated": len(skipped),
+        "added_ids": added,
+    }
+
 @router.post("/book")
 async def lovi_book(data: dict = Body(...)):
     """Бронирование горящего слота через Lovi."""

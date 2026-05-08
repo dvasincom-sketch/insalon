@@ -409,15 +409,56 @@ async def city_partner_request(data: dict = Body(...)):
 @router.post("/connect")
 async def lovi_connect(data: dict = Body(...)):
     """Салон подключил приложение Lovi из маркетплейса YCLIENTS"""
+    import os
+    from jose import jwt as jose_jwt
+    from datetime import datetime, timedelta
+
     salon_id = data.get("salon_id")
     user_info = data.get("user_info", {})
 
     if not salon_id:
         raise HTTPException(400, "salon_id обязателен")
 
-    supabase.table("salons").upsert({
+    res = supabase.table("salons").upsert({
         "company_id": int(salon_id),
         "user_token": "",
+        "yclients_user_id": str(user_info.get("id", "")),
+        "owner_name": user_info.get("name", ""),
+        "owner_phone": user_info.get("phone", ""),
+        "owner_email": user_info.get("email", ""),
+        "salon_name": user_info.get("salon_name", ""),
+        "connected_at": datetime.utcnow().isoformat(),
+        "is_active": True,
     }, on_conflict="company_id").execute()
 
-    return {"ok": True}
+    salon = res.data[0]
+    secret = os.getenv("JWT_SECRET", "lovi-secret-change-in-prod")
+    token = jose_jwt.encode(
+        {"sub": str(salon["id"]), "company_id": int(salon_id), "exp": datetime.utcnow() + timedelta(days=365)},
+        secret, algorithm="HS256"
+    )
+    return {"ok": True, "token": token, "salon": salon}
+
+
+# ── Salon Dashboard ────────────────────────────────────────────────────────────
+
+from fastapi import Header
+
+def get_salon_id(authorization: str = Header(...)) -> int:
+    import os
+    from jose import jwt as jose_jwt, JWTError
+    try:
+        token = authorization.replace("Bearer ", "")
+        secret = os.getenv("JWT_SECRET", "lovi-secret-change-in-prod")
+        payload = jose_jwt.decode(token, secret, algorithms=["HS256"])
+        return int(payload["company_id"])
+    except (JWTError, KeyError):
+        raise HTTPException(401, "Невалидный токен")
+
+@router.get("/salon/me")
+async def salon_me(authorization: str = Header(...)):
+    company_id = get_salon_id(authorization)
+    res = supabase.table("salons").select("*").eq("company_id", company_id).single().execute()
+    if not res.data:
+        raise HTTPException(404, "Салон не найден")
+    return res.data

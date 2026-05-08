@@ -141,7 +141,6 @@ async def yookassa_webhook(request: Request):
                     "services": [{"id": booking["service_id"]}],
                     "client": {"id": system_client_id},
                     "datetime": dt,
-                    "seance_length": booking.get("duration", 3600),
                     "comment": f"{'lovi.today' if source == 'lovi' else 'insalon'} | {booking.get('client_name','')} {normalized} | booking_id={booking_id}",
                 }
                 result = await create_record(booking["company_id"], token, record_data)

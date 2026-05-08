@@ -295,34 +295,7 @@ async def lovi_book(data: dict = Body(...)):
     except Exception as e:
         print(f"[LOVI BOOK] Ошибка клиента YCLIENTS: {e}")
 
-    # 3. Создаём запись в YCLIENTS (fire-and-forget)
-    staff_id = data.get("staff_id") or data.get("staff", {}).get("id") if isinstance(data.get("staff"), dict) else data.get("staff_id")
-    print(f"[LOVI BOOK] staff_id from request: {data.get('staff_id')}, staff: {data.get('staff')}")
-    record_data = {
-        "staff_id": staff_id,
-        "services": [{"id": data.get("service_id")}],
-        "client": {"id": yclients_client_id} if yclients_client_id else {
-            "name": data.get("client_name"),
-            "phone": data.get("client_phone"),
-        },
-        "datetime": data.get("datetime").replace(" ", "T"),
-        "seance_length": data.get("duration"),
-        "comment": f"lovi.today | booking_id={booking_id}",
-    }
-    async def _create_record_bg():
-        try:
-            print(f"[LOVI BOOK] Отправляем в YCLIENTS: {record_data}")
-            result = await create_record(COMPANY_ID, token, record_data)
-            print(f"[LOVI BOOK] YCLIENTS ответ: {result}")
-            if result.get("success"):
-                print(f"[LOVI BOOK] YCLIENTS запись создана booking_id={booking_id}")
-            else:
-                print(f"[LOVI BOOK] YCLIENTS ОШИБКА booking_id={booking_id}: {result}")
-        except Exception as e:
-            print(f"[LOVI BOOK] Ошибка записи YCLIENTS: {e}")
-    asyncio.create_task(_create_record_bg())
-
-    # 4. Создаём платёж YooKassa
+    # 3. Создаём платёж YooKassa (запись в YCLIENTS создаётся после оплаты в payment webhook)
     try:
         from app.routers.payments import get_yookassa
         Payment = get_yookassa()

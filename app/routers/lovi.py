@@ -160,6 +160,12 @@ async def get_featured(date: str = Query(None)):
     ).execute()
     svc_prices = {s["id"]: s["price_min"] for s in svc_res.data}
 
+    # Получаем список мастеров для определения staff_id
+    staff_res = supabase.table("staff").select("id,name").eq("company_id", COMPANY_ID).execute()
+    staff_list = staff_res.data if staff_res.data else []
+    default_staff_id = staff_list[0]["id"] if staff_list else None
+    default_staff_name = staff_list[0]["name"] if staff_list else None
+
     async def fetch_slots_for_date(fetch_date: str) -> list:
         results = []
         now_ts = datetime.now(tz=timezone.utc).timestamp()
@@ -188,6 +194,8 @@ async def get_featured(date: str = Query(None)):
                         "duration_min": slot["seance_length"] // 60,
                         "strategy": strategy_type,
                         "tag": None,
+                        "staff_id": default_staff_id,
+                        "staff_name": default_staff_name,
                         **pricing,
                     })
             return items

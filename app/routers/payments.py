@@ -130,7 +130,12 @@ async def yookassa_webhook(request: Request):
                 # Используем системного клиента Lovi
                 system_client_id = int(os.getenv("LOVI_SYSTEM_CLIENT_ID", "396205299"))
                 source = booking.get("source", "insalon")
-                dt = booking.get("datetime", "").replace(" ", "T")
+                dt_raw = booking.get("datetime", "").replace(" ", "T")
+                # Добавляем timezone если нет
+                if dt_raw and "+" not in dt_raw and "Z" not in dt_raw:
+                    dt = dt_raw + "+03:00"
+                else:
+                    dt = dt_raw
                 record_data = {
                     "staff_id": booking["master_id"],
                     "services": [{"id": booking["service_id"]}],

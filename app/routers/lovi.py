@@ -437,6 +437,39 @@ async def lovi_connect(data: dict = Body(...)):
         {"sub": str(salon["id"]), "company_id": int(salon_id), "exp": datetime.utcnow() + timedelta(days=365)},
         secret, algorithm="HS256"
     )
+    # Welcome письмо с magic link
+    try:
+        import secrets as _secrets, resend as _resend, os
+        from app.emails.utils import render_template
+        ml_token = _secrets.token_urlsafe(32)
+        ml_expires = (datetime.utcnow() + timedelta(days=7)).isoformat()
+        supabase.table("salon_magic_links").insert({
+            "company_id": int(salon_id),
+            "token": ml_token,
+            "expires_at": ml_expires,
+        }).execute()
+        magic_link = f"https://lovi.today/salon/auth?token={ml_token}"
+        _resend.api_key = os.getenv("RESEND_API_KEY")
+        owner_email = user_info.get("email", "")
+        if owner_email:
+            html = render_template(
+                template="salon_welcome",
+                subject="Добро пожаловать в «Лови»",
+                owner_name=user_info.get("name", "Партнёр"),
+                salon_name=user_info.get("salon_name", "Ваш салон"),
+                email=owner_email,
+                magic_link=magic_link,
+            )
+            _resend.Emails.send({
+                "from": "«Лови» <noreply@lovi.today>",
+                "to": owner_email,
+                "subject": "Добро пожаловать в «Лови»",
+                "html": html,
+            })
+    except Exception as e:
+        import logging
+        logging.error(f"salon welcome email error: {e}")
+
     return {"ok": True, "token": token, "salon": salon}
 
 
@@ -462,3 +495,85 @@ async def salon_me(authorization: str = Header(...)):
     if not res.data:
         raise HTTPException(404, "Салон не найден")
     return res.data
+
+
+# ── Salon Magic Link ───────────────────────────────────────────────────────────
+
+import secrets, resend as _resend
+from app.emails.utils import render_template
+
+@router.post("/salon/magic-link")
+async def salon_magic_link(data: dict = Body(...)):
+    """Запрос magic link для входа в кабинет салона"""
+    email = (data.get("email") or "").strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(422, "Укажите email")
+
+    # Ищем салон по email
+    res = supabase.table("salons").select("id,company_id,owner_name,salon_name,owner_email")\
+        .eq("owner_email", email).execute()
+    # Всегда 200 — не раскрываем существование
+    if not res.data:
+        return {"ok": True}
+
+    salon = res.data[0]
+    token = secrets.token_urlsafe(32)
+    expires = (datetime.utcnow() + timedelta(days=7)).isoformat()
+
+    supabase.table("salon_magic_links").insert({
+        "company_id": salon["company_id"],
+        "token": token,
+        "expires_at": expires,
+    }).execute()
+
+    magic_link = f"https://lovi.today/salon/auth?token={token}"
+
+    import os
+    _resend.api_key = os.getenv("RESEND_API_KEY")
+    html = render_template(
+        template="salon_welcome",
+        subject="Вход в кабинет «Лови»",
+        owner_name=salon["owner_name"] or "Партнёр",
+        salon_name=salon["salon_name"] or "Ваш салон",
+        email=email,
+        magic_link=magic_link,
+    )
+    _resend.Emails.send({
+        "from": "«Лови» <noreply@lovi.today>",
+        "to": email,
+        "subject": "Вход в кабинет партнёра «Лови»",
+        "html": html,
+    })
+    return {"ok": True}
+
+
+@router.get("/salon/auth")
+async def salon_auth_by_token(token: str):
+    """Верификация magic link — возвращает JWT салона"""
+    from datetime import timezone
+    res = supabase.table("salon_magic_links").select("*").eq("token", token).execute()
+    if not res.data:
+        raise HTTPException(400, "Ссылка недействительна")
+    rec = res.data[0]
+    if rec["used"]:
+        raise HTTPException(400, "Ссылка уже использована")
+    expires = datetime.fromisoformat(rec["expires_at"].replace("Z", "+00:00"))
+    if datetime.now(timezone.utc) > expires:
+        raise HTTPException(400, "Ссылка истекла")
+
+    # Помечаем использованной
+    supabase.table("salon_magic_links").update({"used": True}).eq("token", token).execute()
+
+    # Получаем салон
+    salon = supabase.table("salons").select("*")\
+        .eq("company_id", rec["company_id"]).single().execute().data
+
+    import os
+    from jose import jwt as jose_jwt
+    secret = os.getenv("JWT_SECRET", "lovi-secret-change-in-prod")
+    jwt_token = jose_jwt.encode(
+        {"sub": str(salon["id"]), "company_id": salon["company_id"],
+         "exp": datetime.utcnow() + timedelta(days=30)},
+        secret, algorithm="HS256"
+    )
+    return {"ok": True, "token": jwt_token, "salon": salon}

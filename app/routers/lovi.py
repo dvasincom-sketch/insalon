@@ -732,47 +732,6 @@ async def salon_auth_by_token(token: str):
     return {"ok": True, "token": jwt_token, "salon": salon}
 
 # ── Zones 2GIS ─────────────────────────────────────────────────────────────
-@router.get("/zones/search")
-async def search_zones(
-    lat: float = Query(...),
-    lon: float = Query(...),
-    radius: int = Query(600),
-    q: str = Query("массаж")
-):
-    """Поиск массажных салонов в радиусе через 2GIS API"""
-    import os, httpx
-
-    key = os.getenv("DGIS_API_KEY")
-    if not key:
-        raise HTTPException(500, "DGIS_API_KEY не настроен")
-
-    url = "https://catalog.api.2gis.com/3.0/items"
-    params = {
-        "q": q,
-        "point": f"{lon},{lat}",   # 2GIS принимает lon,lat!
-        "radius": radius,
-        "fields": "items.point,items.address,items.rating",
-        "key": key,
-        "locale": "ru_RU",
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(url, params=params)
-        if resp.status_code != 200:
-            raise HTTPException(502, f"2GIS ответил {resp.status_code}")
-        data = resp.json()
-        items = []
-        for it in data.get("result", {}).get("items", []):
-            items.append({
-                "name": it.get("name"),
-                "address": it.get("address_name", ""),
-                "rating": it.get("rating"),
-            })
-        return {"count": len(items), "items": items}
-    except Exception as e:
-        raise HTTPException(502, f"Ошибка запроса к 2GIS: {str(e)}")
-
 # ── Cancel Booking ─────────────────────────────────────────────────────────
 
 @router.post("/bookings/{booking_id}/cancel")

@@ -1,5 +1,9 @@
 from fastapi import APIRouter, Query, HTTPException, Body, Header
 from app.yclients import get_book_times
+import asyncio
+import httpx
+import math
+import urllib.parse
 from app.database import supabase
 from datetime import datetime, timezone, timedelta, date as dt_module
 
@@ -38,7 +42,168 @@ class DynamicDiscountStrategy:
         else:
             return base_price * self.coeff_hot
 
+# ── Zones: вспомогательные функции ────────────────────────────────────────
 
+def _in_bbox(lat: float | None, lon: float | None, bbox: tuple | None) -> bool:
+    """True если точка внутри bbox = (min_lat, min_lon, max_lat, max_lon)."""
+    if not bbox or lat is None or lon is None:
+        return True
+    min_lat, min_lon, max_lat, max_lon = bbox
+    return min_lat <= lat <= max_lat and min_lon <= lon <= max_lon
+
+
+def _dedup_items(items: list[dict]) -> list[dict]:
+    """Дедупликация по dgis_id, затем по (name[:20]+address[:20])."""
+    seen: set = set()
+    result = []
+    for it in items:
+        dgis_id = it.get("dgis_id")
+        if dgis_id:
+            key = f"id:{dgis_id}"
+        else:
+            key = f"na:{it.get('name','')[:20].lower()}|{it.get('address','')[:20].lower()}"
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(it)
+    return result
+
+
+async def _fetch_2gis_zone(
+    client: httpx.AsyncClient,
+    zone_id: str,
+    lat: float,
+    lon: float,
+    radius: int,
+    key: str,
+    bbox: tuple | None,
+) -> tuple[str, list[dict], str | None]:
+    """
+    Запрашивает 2GIS для зоны. Бесплатный ключ даёт max 10 объектов за запрос.
+    Делаем 3 запроса со смещёнными центрами для захвата большего числа объектов.
+    """
+    offsets = [(0, 0), (0.003, 0), (0, 0.004)]  # центр, +~330м N, +~280м E
+    all_items: list[dict] = []
+
+    for dlat, dlon in offsets:
+        params = {
+            "q": "массаж",
+            "point": f"{lon + dlon},{lat + dlat}",
+            "radius": radius,
+            "fields": "items.point,items.address_name,items.reviews,items.rubrics,items.id",
+            "key": key,
+            "locale": "ru_RU",
+        }
+        try:
+            resp = await client.get(
+                "https://catalog.api.2gis.com/3.0/items",
+                params=params,
+                timeout=20.0,
+            )
+            if resp.status_code != 200:
+                print(f"[2GIS] {zone_id} offset({dlat},{dlon}): HTTP {resp.status_code}")
+                continue
+            raw = resp.json().get("result", {}).get("items") or []
+        except Exception as e:
+            print(f"[2GIS] {zone_id} offset({dlat},{dlon}): {e}")
+            continue
+
+        for it in raw:
+            point = it.get("point") or {}
+            item_lat = point.get("lat")
+            item_lon = point.get("lon")
+            if not _in_bbox(item_lat, item_lon, bbox):
+                continue
+            reviews = it.get("reviews") or {}
+            rating_raw = reviews.get("rating_frequency")
+            all_items.append({
+                "source":        "2gis",
+                "dgis_id":       it.get("id"),
+                "name":          it.get("name", "Без названия"),
+                "address":       it.get("address_name", ""),
+                "rating":        f"{float(rating_raw):.1f}" if rating_raw else None,
+                "reviews_count": reviews.get("general_review_count_with_stars"),
+                "lat":           item_lat,
+                "lon":           item_lon,
+                "rubrics":       [r["name"] for r in (it.get("rubrics") or [])[:3]],
+            })
+
+    return zone_id, _dedup_items(all_items), None
+
+
+async def _fetch_overpass_zone(
+    client: httpx.AsyncClient,
+    zone_id: str,
+    lat: float,
+    lon: float,
+    radius: int,
+    bbox: tuple | None,
+) -> tuple[str, list[dict], str | None]:
+    """
+    Запрашивает Overpass API (OSM). Исправленный формат:
+    POST + application/x-www-form-urlencoded (не multipart).
+    """
+    if bbox:
+        s, w, n, e = bbox
+    else:
+        d = radius / 111000
+        s, n = lat - d, lat + d
+        w = lon - d * math.cos(math.radians(lat))
+        e = lon + d * math.cos(math.radians(lat))
+
+    query = f"""[out:json][timeout:15];
+(
+  node["amenity"="massage"]({s},{w},{n},{e});
+  way["amenity"="massage"]({s},{w},{n},{e});
+  node["shop"="massage"]({s},{w},{n},{e});
+  way["shop"="massage"]({s},{w},{n},{e});
+  node["amenity"="spa"]({s},{w},{n},{e});
+);
+out center 30;"""
+
+    encoded = urllib.parse.urlencode({"data": query})
+    try:
+        resp = await client.post(
+            "https://overpass-api.de/api/interpreter",
+            content=encoded.encode("utf-8"),
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "User-Agent": "lovi-analytics/1.0 contact@lovi.today",
+            },
+            timeout=20.0,
+        )
+        if resp.status_code != 200:
+            return zone_id, [], f"Overpass HTTP {resp.status_code}"
+        elements = resp.json().get("elements", [])
+    except Exception as e:
+        return zone_id, [], f"Overpass error: {e}"
+
+    items = []
+    for el in elements:
+        tags = el.get("tags", {})
+        name = tags.get("name") or tags.get("brand")
+        if not name:
+            continue
+        if el["type"] == "node":
+            item_lat, item_lon = el.get("lat"), el.get("lon")
+        else:
+            center = el.get("center", {})
+            item_lat, item_lon = center.get("lat"), center.get("lon")
+        if not _in_bbox(item_lat, item_lon, bbox):
+            continue
+        address = (tags.get("addr:street", "") + " " + tags.get("addr:housenumber", "")).strip()
+        items.append({
+            "source":        "osm",
+            "dgis_id":       None,
+            "name":          name,
+            "address":       address,
+            "rating":        None,
+            "reviews_count": None,
+            "lat":           item_lat,
+            "lon":           item_lon,
+            "rubrics":       [tags.get("amenity") or tags.get("shop", "")],
+        })
+    return zone_id, items, None
 def get_strategy_from_row(row: dict) -> DynamicDiscountStrategy:
     return DynamicDiscountStrategy(
         threshold_far=row["threshold_far"],
@@ -731,41 +896,130 @@ async def salon_auth_by_token(token: str):
     )
     return {"ok": True, "token": jwt_token, "salon": salon}
 
-# ── Zones 2GIS ─────────────────────────────────────────────────────────────
-# Конфигурация зон (координаты центров, радиус) – должна совпадать с ZoneMap.jsx
+# ── Zones 2GIS + Overpass ──────────────────────────────────────────────────
+#
+# bbox = (min_lat, min_lon, max_lat, max_lon).
+# Объект включается в зону только если его точка внутри bbox.
+# Это предотвращает пересечение зон на барьерных улицах.
+#
+# Ключевые барьеры ЮЗАО:
+#   Миклухо-Маклая:    lat ≈ 55.6455
+#   Профсоюзная:       lon ≈ 37.5240
+#   Севастопольский:   lon ≈ 37.5540
+#   Нахимовский пр.:   lat ≈ 55.6800
+#   ул. Обручева:      lat ≈ 55.6600
+#   ул. Наметкина:     lat ≈ 55.6700
+#   ул. Гарибальди:    lat ≈ 55.6760
+
 ZONE_CONFIG = {
-    "yabloneviy-sad":            {"lat": 55.6455, "lon": 37.5185, "radius": 550},
-    "konkovskie-prudy":          {"lat": 55.6370, "lon": 37.5155, "radius": 600},
-    "derevlyovskiy-prud":        {"lat": 55.6505, "lon": 37.5490, "radius": 580},
-    "belyaevo-center":           {"lat": 55.6468, "lon": 37.5360, "radius": 480},
-    "obrucheva-st":              {"lat": 55.6560, "lon": 37.5310, "radius": 560},
-    "kaluzhskaya-border":        {"lat": 55.6635, "lon": 37.5145, "radius": 520},
-    "rudn":                      {"lat": 55.6530, "lon": 37.5655, "radius": 600},
-    "samorodinka":               {"lat": 55.6620, "lon": 37.5720, "radius": 580},
-    "vorontsovskaya":            {"lat": 55.6680, "lon": 37.5350, "radius": 580},
-    "novye-cheremushki":         {"lat": 55.6740, "lon": 37.5440, "radius": 560},
-    "novatorskaya":              {"lat": 55.6760, "lon": 37.5210, "radius": 570},
-    "cheremushki-north":         {"lat": 55.6650, "lon": 37.5580, "radius": 560},
-    "cheremushki-center":        {"lat": 55.6720, "lon": 37.5600, "radius": 560},
-    "cheremushki-south":         {"lat": 55.6790, "lon": 37.5620, "radius": 550},
-    "lomonosovsky-vorontsovsky": {"lat": 55.6710, "lon": 37.5080, "radius": 580},
-    "lomonosovsky-leninsky":     {"lat": 55.6820, "lon": 37.5010, "radius": 600},
-    "lomonosovsky-nakhimovsky":  {"lat": 55.6790, "lon": 37.5170, "radius": 560},
+    # ── КОНЬКОВО ──────────────────────────────────────────────────────────────
+    "yabloneviy-sad": {
+        "lat": 55.6455, "lon": 37.5185, "radius": 550,
+        # Западнее Профсоюзной, севернее Миклухо-Маклая
+        "bbox": (55.6380, 37.4950, 55.6520, 37.5240),
+    },
+    "konkovskie-prudy": {
+        "lat": 55.6370, "lon": 37.5155, "radius": 600,
+        # Южнее Яблоневого сада, Битцевский лес на юге
+        "bbox": (55.6280, 37.4950, 55.6440, 37.5240),
+    },
+    "derevlyovskiy-prud": {
+        "lat": 55.6505, "lon": 37.5490, "radius": 580,
+        # Восточнее Профсоюзной, севернее Миклухо-Маклая, западнее Севастопольского
+        "bbox": (55.6440, 37.5240, 55.6580, 37.5540),
+    },
+    "belyaevo-center": {
+        "lat": 55.6468, "lon": 37.5360, "radius": 480,
+        # FIX: min_lat=55.6410 — ниже ул. Миклухо-Маклая 37, чтобы она попадала сюда,
+        # а не в Яблоневый сад. Ул. Миклухо-Маклая 37 ≈ lat 55.644 — входит в эту зону.
+        "bbox": (55.6410, 37.5240, 55.6530, 37.5540),
+    },
+    "obrucheva-st": {
+        "lat": 55.6560, "lon": 37.5310, "radius": 560,
+        # Полоса вдоль ул. Обручева, между Беляево и Воронцовской
+        "bbox": (55.6530, 37.5240, 55.6630, 37.5540),
+    },
+    "kaluzhskaya-border": {
+        "lat": 55.6635, "lon": 37.5145, "radius": 520,
+        # Северо-западный угол Коньково, западнее Профсоюзной
+        "bbox": (55.6540, 37.4900, 55.6700, 37.5240),
+    },
+
+    # ── ОБРУЧЕВСКИЙ ───────────────────────────────────────────────────────────
+    "rudn": {
+        "lat": 55.6530, "lon": 37.5655, "radius": 600,
+        # Кампус РУДН, восточнее Севастопольского
+        "bbox": (55.6430, 37.5540, 55.6630, 37.5800),
+    },
+    "samorodinka": {
+        "lat": 55.6620, "lon": 37.5720, "radius": 580,
+        # Лесопарк р. Самородинка, севернее РУДН
+        "bbox": (55.6580, 37.5540, 55.6720, 37.5900),
+    },
+    "vorontsovskaya": {
+        "lat": 55.6680, "lon": 37.5350, "radius": 580,
+        # Воронцовский парк, центр Обручевского
+        "bbox": (55.6600, 37.5240, 55.6720, 37.5540),
+    },
+    "novye-cheremushki": {
+        "lat": 55.6740, "lon": 37.5440, "radius": 560,
+        # м. Новые Черёмушки, между Наметкина и Гарибальди
+        "bbox": (55.6680, 37.5240, 55.6780, 37.5540),
+    },
+    "novatorskaya": {
+        "lat": 55.6760, "lon": 37.5210, "radius": 570,
+        # м. Новаторская (БКЛ), западнее Профсоюзной
+        "bbox": (55.6680, 37.5000, 55.6840, 37.5240),
+    },
+
+    # ── ЧЕРЁМУШКИ ─────────────────────────────────────────────────────────────
+    "cheremushki-north": {
+        "lat": 55.6650, "lon": 37.5580, "radius": 560,
+        # Севернее Обручева, восточнее Севастопольского
+        "bbox": (55.6570, 37.5540, 55.6700, 37.5800),
+    },
+    "cheremushki-center": {
+        "lat": 55.6720, "lon": 37.5600, "radius": 560,
+        # Центральная полоса, м. Профсоюзная
+        "bbox": (55.6680, 37.5540, 55.6760, 37.5850),
+    },
+    "cheremushki-south": {
+        "lat": 55.6790, "lon": 37.5620, "radius": 550,
+        # FIX: уточнён bbox, прежний центр lat=55.679 был слишком северным
+        "bbox": (55.6740, 37.5540, 55.6820, 37.5850),
+    },
+
+    # ── ЛОМОНОСОВСКИЙ ─────────────────────────────────────────────────────────
+    "lomonosovsky-vorontsovsky": {
+        "lat": 55.6710, "lon": 37.5080, "radius": 580,
+        # Западная часть, Воронцовский парк
+        "bbox": (55.6620, 37.4850, 55.6780, 37.5240),
+    },
+    "lomonosovsky-leninsky": {
+        "lat": 55.6820, "lon": 37.5010, "radius": 600,
+        # Центральная часть, между Ленинским и Вернадского
+        "bbox": (55.6760, 37.4750, 55.6880, 37.5240),
+    },
+    "lomonosovsky-nakhimovsky": {
+        "lat": 55.6790, "lon": 37.5170, "radius": 560,
+        # Восточная полоса, граница с Черёмушками
+        "bbox": (55.6720, 37.5050, 55.6860, 37.5400),
+    },
 }
+
 
 @router.get("/zones/search")
 async def search_zones(zone_id: str = Query(..., description="ID зоны из конфигурации")):
-    """
-    Возвращает закэшированные данные о конкурентах в зоне.
-    Если данных нет — вернёт cache_miss=true.
-    """
+    """Возвращает закэшированные данные о конкурентах. Если нет — cache_miss=true."""
     try:
-        res = supabase.table("zone_cache") \
-            .select("*") \
-            .eq("zone_id", zone_id) \
-            .order("fetched_at", desc=True) \
-            .limit(1) \
+        res = (
+            supabase.table("zone_cache")
+            .select("*")
+            .eq("zone_id", zone_id)
+            .order("fetched_at", desc=True)
+            .limit(1)
             .execute()
+        )
     except Exception as e:
         raise HTTPException(500, f"Ошибка чтения кэша: {str(e)}")
 
@@ -774,9 +1028,9 @@ async def search_zones(zone_id: str = Query(..., description="ID зоны из �
 
     row = res.data[0]
     return {
-        "zone_id": zone_id,
-        "count": row.get("count", 0),
-        "items": row.get("items", []),
+        "zone_id":    zone_id,
+        "count":      row.get("count", 0),
+        "items":      row.get("items", []),
         "fetched_at": row.get("fetched_at"),
         "cache_miss": False,
     }
@@ -785,84 +1039,115 @@ async def search_zones(zone_id: str = Query(..., description="ID зоны из �
 @router.post("/zones/refresh")
 async def refresh_zones(data: dict = Body(...)):
     """
-    Обновляет кэш для списка зон (переданных в теле).
-    Для каждой зоны запрашивает 2GIS и сохраняет результат.
-    Ожидает: { "zones": [ {"id": "...", "lat": ..., "lon": ..., "radius": ...}, ... ] }
+    Параллельно обновляет кэш для всех переданных зон.
+    Ожидает: { "zones": [ {"id": "...", "lat": ..., "lon": ..., "radius": ...} ] }
+    Опционально: { "use_overpass": true } для включения OSM-данных.
+
+    Изменения v2:
+    - Все запросы параллельные через asyncio.gather (было: последовательный for)
+    - Таймаут 20с вместо 10с (fix для rudn / cheremushki-south)
+    - 3 смещённых запроса к 2GIS для обхода лимита 10 объектов
+    - Overpass исправлен: POST + urlencode (fix ошибки 400)
+    - Предохранитель: читается одним запросом до старта, не внутри цикла
+    - bbox берётся из ZONE_CONFIG, а не из тела запроса
     """
-    import os, httpx
-    from datetime import timezone
+    import os
 
     key = os.getenv("DGIS_API_KEY")
     if not key:
         raise HTTPException(500, "DGIS_API_KEY не настроен")
 
-    zones = data.get("zones", [])
-    if not zones:
+    zones_input = data.get("zones", [])
+    use_overpass = data.get("use_overpass", False)
+
+    if not zones_input:
         raise HTTPException(400, "Не передано ни одной зоны")
 
-    results = {}
-    async with httpx.AsyncClient(timeout=10) as client:
-        for z in zones:
-            zone_id = z.get("id")
-            lat = z.get("lat")
-            lon = z.get("lon")
-            radius = z.get("radius", 600)
+    now_iso = datetime.now(timezone.utc).isoformat()
 
-            if not zone_id or not lat or not lon:
-                continue
+    # Читаем весь кэш одним запросом для предохранителя
+    zone_ids = [z["id"] for z in zones_input if z.get("id")]
+    try:
+        cache_res = (
+            supabase.table("zone_cache")
+            .select("zone_id,count")
+            .in_("zone_id", zone_ids)
+            .execute()
+        )
+        cached_counts = {row["zone_id"]: row.get("count", 0) for row in (cache_res.data or [])}
+    except Exception:
+        cached_counts = {}
 
-            url = "https://catalog.api.2gis.com/3.0/items"
-            params = {
-                "q": "массаж",
-                "point": f"{lon},{lat}",
-                "radius": radius,
-                "page_size": 15,
-                "fields": "items.point,items.address,items.rating,items.reviews_count,items.rubrics",
-                "key": key,
-                "locale": "ru_RU",
-            }
+    async def fetch_zone(z: dict):
+        zone_id = z.get("id")
+        lat     = z.get("lat")
+        lon     = z.get("lon")
+        radius  = z.get("radius", 600)
+        if not zone_id or not lat or not lon:
+            return None
 
-            try:
-                resp = await client.get(url, params=params)
-                if resp.status_code != 200:
-                    items = []
-                    count = 0
-                else:
-                    data_resp = resp.json()
-                    raw_items = data_resp.get("result", {}).get("items", [])
-                    items = []
-                    for it in raw_items:
-                        p = it.get("point")
-                        items.append({
-                            "name": it.get("name", "Без названия"),
-                            "address": it.get("address_name", ""),
-                            "rating": it.get("rating"),
-                            "dgis_id": it.get("id"),
-                            "point": p,
-                            "reviews_count": it.get("reviews_count", 0),
-                            "rubrics": [r.get("name") for r in it.get("rubrics", []) if r.get("name")],
-                        })
-                    count = len(items)
-            except Exception as e:
-                items = []
-                count = 0
-                print(f"[ZONES] ошибка для {zone_id}: {e}")
+        cfg  = ZONE_CONFIG.get(zone_id, {})
+        bbox = cfg.get("bbox")
 
-            # Сохраняем в кэш (upsert)
-            now_iso = datetime.now(timezone.utc).isoformat()
-            try:
-                supabase.table("zone_cache").upsert({
-                    "zone_id": zone_id,
-                    "count": count,
-                    "items": items,
-                    "fetched_at": now_iso,
-                }, on_conflict="zone_id").execute()
-            except Exception as e:
-                print(f"[ZONES] ошибка сохранения кэша для {zone_id}: {e}")
+        async with httpx.AsyncClient() as client:
+            _, dgis_items, dgis_err = await _fetch_2gis_zone(
+                client, zone_id, lat, lon, radius, key, bbox
+            )
+            osm_items = []
+            if use_overpass:
+                _, osm_items, osm_err = await _fetch_overpass_zone(
+                    client, zone_id, lat, lon, radius, bbox
+                )
+                if osm_err:
+                    print(f"[OSM] {zone_id}: {osm_err}")
 
-            results[zone_id] = {"count": count, "items": items, "fetched_at": now_iso}
+        combined = _dedup_items(dgis_items + osm_items)
+        count    = len(combined)
 
-    return {"ok": True, "zones": results}
+        # Предохранитель: сравниваем с кэшем прочитанным ДО старта
+        cached = cached_counts.get(zone_id, 0)
+        if count < cached:
+            print(f"[ZONES] {zone_id}: новых {count} < кэш {cached}, старый кэш сохранён")
+            return zone_id, None, dgis_err
+
+        return zone_id, {"count": count, "items": combined}, dgis_err
+
+    fetch_results = await asyncio.gather(*[fetch_zone(z) for z in zones_input])
+
+    to_upsert = []
+    saved     = {}
+    errors    = []
+
+    for result in fetch_results:
+        if result is None:
+            continue
+        zone_id, payload, err = result
+        if err:
+            errors.append({"zone_id": zone_id, "error": err})
+        if payload is None:
+            saved[zone_id] = {"count": cached_counts.get(zone_id, 0), "skipped": True}
+            continue
+        to_upsert.append({
+            "zone_id":    zone_id,
+            "count":      payload["count"],
+            "items":      payload["items"],
+            "fetched_at": now_iso,
+        })
+        saved[zone_id] = {"count": payload["count"], "fetched_at": now_iso}
+
+    to_upsert = [r for r in to_upsert if r['count'] > 0]
+    if to_upsert:
+        try:
+            supabase.table("zone_cache").upsert(to_upsert, on_conflict="zone_id").execute()
+        except Exception as e:
+            raise HTTPException(500, f"Supabase error: {e}")
+
+    return {
+        "ok":         True,
+        "fetched_at": now_iso,
+        "zones":      saved,
+        "errors":     errors or None,
+    }
 
 # ── Cancel Booking ─────────────────────────────────────────────────────────
 

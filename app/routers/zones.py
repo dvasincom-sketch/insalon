@@ -48,9 +48,8 @@ async def fetch_2gis(lat: float, lon: float, radius: int, q: str = "массаж
         "q": q,
         "point": f"{lon},{lat}",
         "radius": radius,
-        "type": "branch",
         "fields": "items.point,items.address_name,items.reviews,items.rubrics,items.id",
-        "page_size": 50,
+        "page_size": "50",
         "key": DGIS_KEY,
         "locale": "ru_RU",
     }
@@ -110,13 +109,13 @@ async def zones_search(zone_id: str):
             .table("zone_2gis_cache")
             .select("items, fetched_at")
             .eq("zone_id", zone_id)
+            .maybeSingle()
             .execute()
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    rows = result.data or []
-    if not rows:
+    if not result.data:
         return {
             "zone_id":    zone_id,
             "count":      0,
@@ -125,12 +124,12 @@ async def zones_search(zone_id: str):
             "cache_miss": True,
         }
 
-    items = rows[0]["items"]
+    items = result.data["items"]
     return {
         "zone_id":    zone_id,
         "count":      len(items),
         "items":      items,
-        "fetched_at": rows[0]["fetched_at"],
+        "fetched_at": result.data["fetched_at"],
         "cache_miss": False,
     }
 

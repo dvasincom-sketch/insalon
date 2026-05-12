@@ -8,7 +8,7 @@ router = APIRouter(prefix="/api/lovi", tags=["lovi"])
 COMPANY_ID = 1166484
 
 def get_user_token():
-    res = supabase.table("salons").select("user_token").eq("company_id", COMPANY_ID).single().execute()
+    res = supabase.table("salons").select("user_token").eq("company_id", COMPANY_ID).limit(1).execute()
     return res.data["user_token"]
 
 
@@ -170,7 +170,7 @@ async def get_slots(
 ):
     token = get_user_token()
     slots_raw = (await get_book_times(COMPANY_ID, token, date, service_id)).get("data", [])
-    svc = supabase.table("services").select("price_min").eq("id", service_id).single().execute()
+    svc = supabase.table("services").select("price_min").eq("id", service_id).limit(1).execute()
     base_price = svc.data["price_min"] if svc.data else 5000
     strategy = get_strategy(service_id)
 
@@ -349,7 +349,7 @@ async def sync_services(authorization: str = Header(...)):
     import os, httpx
     company_id = get_salon_id(authorization)
 
-    salon = supabase.table("salons").select("user_token").eq("company_id", company_id).single().execute().data
+    salon = supabase.table("salons").select("user_token").eq("company_id", company_id).limit(1).execute().data
     token = salon["user_token"]
     partner_token = os.getenv("YCLIENTS_PARTNER_TOKEN", "").strip()
 
@@ -625,7 +625,7 @@ def get_salon_id(authorization: str = Header(...)) -> int:
 @router.get("/salon/me")
 async def salon_me(authorization: str = Header(...)):
     company_id = get_salon_id(authorization)
-    res = supabase.table("salons").select("*").eq("company_id", company_id).single().execute()
+    res = supabase.table("salons").select("*").eq("company_id", company_id).limit(1).execute()
     if not res.data:
         raise HTTPException(404, "Салон не найден")
     salon = res.data
@@ -720,7 +720,7 @@ async def salon_auth_by_token(token: str):
         raise HTTPException(400, "Ссылка истекла")
     supabase.table("salon_magic_links").update({"used": True}).eq("token", token).execute()
     salon = supabase.table("salons").select("*") \
-        .eq("company_id", rec["company_id"]).single().execute().data
+        .eq("company_id", rec["company_id"]).limit(1).execute().data
     import os
     from jose import jwt as jose_jwt
     secret = os.getenv("JWT_SECRET", "lovi-secret-change-in-prod")
@@ -816,6 +816,7 @@ async def refresh_zones(data: dict = Body(...)):
                 "q": "массаж",
                 "point": f"{lon},{lat}",
                 "radius": radius,
+                "page_size": 100,
                 "fields": "items.point,items.address,items.rating,items.reviews_count,items.rubrics",
                 "key": key,
                 "locale": "ru_RU",
@@ -900,7 +901,7 @@ async def cancel_booking(booking_id: int, authorization: str = Header(...)):
             import httpx
             partner_token = os.getenv("YCLIENTS_PARTNER_TOKEN", "").strip()
             salon = supabase.table("salons").select("user_token") \
-                .eq("company_id", booking["company_id"]).single().execute().data
+                .eq("company_id", booking["company_id"]).limit(1).execute().data
             async with httpx.AsyncClient(timeout=5) as client:
                 resp = await client.delete(
                     f"https://api.yclients.com/api/v1/record/{booking['company_id']}/{booking['yclients_record_id']}",
@@ -920,7 +921,7 @@ async def cancel_booking(booking_id: int, authorization: str = Header(...)):
         "user_id": user_id, "booking_id": booking_id,
         "amount": refund_amount * 100, "type": "refund",
     }).execute()
-    user_res = supabase.table("users").select("lovi_balance").eq("id", user_id).single().execute()
+    user_res = supabase.table("users").select("lovi_balance").eq("id", user_id).limit(1).execute()
     current_balance = user_res.data.get("lovi_balance", 0) or 0
     supabase.table("users").update({
         "lovi_balance": current_balance + refund_amount

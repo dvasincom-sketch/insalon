@@ -732,6 +732,137 @@ async def salon_auth_by_token(token: str):
     return {"ok": True, "token": jwt_token, "salon": salon}
 
 # ── Zones 2GIS ─────────────────────────────────────────────────────────────
+# Конфигурация зон (координаты центров, радиус) – должна совпадать с ZoneMap.jsx
+ZONE_CONFIG = {
+    "yabloneviy-sad":            {"lat": 55.6455, "lon": 37.5185, "radius": 550},
+    "konkovskie-prudy":          {"lat": 55.6370, "lon": 37.5155, "radius": 600},
+    "derevlyovskiy-prud":        {"lat": 55.6505, "lon": 37.5490, "radius": 580},
+    "belyaevo-center":           {"lat": 55.6468, "lon": 37.5360, "radius": 480},
+    "obrucheva-st":              {"lat": 55.6560, "lon": 37.5310, "radius": 560},
+    "kaluzhskaya-border":        {"lat": 55.6635, "lon": 37.5145, "radius": 520},
+    "rudn":                      {"lat": 55.6530, "lon": 37.5655, "radius": 600},
+    "samorodinka":               {"lat": 55.6620, "lon": 37.5720, "radius": 580},
+    "vorontsovskaya":            {"lat": 55.6680, "lon": 37.5350, "radius": 580},
+    "novye-cheremushki":         {"lat": 55.6740, "lon": 37.5440, "radius": 560},
+    "novatorskaya":              {"lat": 55.6760, "lon": 37.5210, "radius": 570},
+    "cheremushki-north":         {"lat": 55.6650, "lon": 37.5580, "radius": 560},
+    "cheremushki-center":        {"lat": 55.6720, "lon": 37.5600, "radius": 560},
+    "cheremushki-south":         {"lat": 55.6790, "lon": 37.5620, "radius": 550},
+    "lomonosovsky-vorontsovsky": {"lat": 55.6710, "lon": 37.5080, "radius": 580},
+    "lomonosovsky-leninsky":     {"lat": 55.6820, "lon": 37.5010, "radius": 600},
+    "lomonosovsky-nakhimovsky":  {"lat": 55.6790, "lon": 37.5170, "radius": 560},
+}
+
+@router.get("/zones/search")
+async def search_zones(zone_id: str = Query(..., description="ID зоны из конфигурации")):
+    """
+    Возвращает закэшированные данные о конкурентах в зоне.
+    Если данных нет — вернёт cache_miss=true.
+    """
+    try:
+        res = supabase.table("zone_cache") \
+            .select("*") \
+            .eq("zone_id", zone_id) \
+            .order("fetched_at", desc=True) \
+            .limit(1) \
+            .execute()
+    except Exception as e:
+        raise HTTPException(500, f"Ошибка чтения кэша: {str(e)}")
+
+    if not res.data:
+        return {"zone_id": zone_id, "count": 0, "items": [], "cache_miss": True}
+
+    row = res.data[0]
+    return {
+        "zone_id": zone_id,
+        "count": row.get("count", 0),
+        "items": row.get("items", []),
+        "fetched_at": row.get("fetched_at"),
+        "cache_miss": False,
+    }
+
+
+@router.post("/zones/refresh")
+async def refresh_zones(data: dict = Body(...)):
+    """
+    Обновляет кэш для списка зон (переданных в теле).
+    Для каждой зоны запрашивает 2GIS и сохраняет результат.
+    Ожидает: { "zones": [ {"id": "...", "lat": ..., "lon": ..., "radius": ...}, ... ] }
+    """
+    import os, httpx
+    from datetime import timezone
+
+    key = os.getenv("DGIS_API_KEY")
+    if not key:
+        raise HTTPException(500, "DGIS_API_KEY не настроен")
+
+    zones = data.get("zones", [])
+    if not zones:
+        raise HTTPException(400, "Не передано ни одной зоны")
+
+    results = {}
+    async with httpx.AsyncClient(timeout=10) as client:
+        for z in zones:
+            zone_id = z.get("id")
+            lat = z.get("lat")
+            lon = z.get("lon")
+            radius = z.get("radius", 600)
+
+            if not zone_id or not lat or not lon:
+                continue
+
+            url = "https://catalog.api.2gis.com/3.0/items"
+            params = {
+                "q": "массаж",
+                "point": f"{lon},{lat}",
+                "radius": radius,
+                "fields": "items.point,items.address,items.rating,items.reviews_count,items.rubrics",
+                "key": key,
+                "locale": "ru_RU",
+            }
+
+            try:
+                resp = await client.get(url, params=params)
+                if resp.status_code != 200:
+                    items = []
+                    count = 0
+                else:
+                    data_resp = resp.json()
+                    raw_items = data_resp.get("result", {}).get("items", [])
+                    items = []
+                    for it in raw_items:
+                        p = it.get("point")
+                        items.append({
+                            "name": it.get("name", "Без названия"),
+                            "address": it.get("address_name", ""),
+                            "rating": it.get("rating"),
+                            "dgis_id": it.get("id"),
+                            "point": p,
+                            "reviews_count": it.get("reviews_count", 0),
+                            "rubrics": [r.get("name") for r in it.get("rubrics", []) if r.get("name")],
+                        })
+                    count = len(items)
+            except Exception as e:
+                items = []
+                count = 0
+                print(f"[ZONES] ошибка для {zone_id}: {e}")
+
+            # Сохраняем в кэш (upsert)
+            now_iso = datetime.now(timezone.utc).isoformat()
+            try:
+                supabase.table("zone_cache").upsert({
+                    "zone_id": zone_id,
+                    "count": count,
+                    "items": items,
+                    "fetched_at": now_iso,
+                }, on_conflict="zone_id").execute()
+            except Exception as e:
+                print(f"[ZONES] ошибка сохранения кэша для {zone_id}: {e}")
+
+            results[zone_id] = {"count": count, "items": items, "fetched_at": now_iso}
+
+    return {"ok": True, "zones": results}
+
 # ── Cancel Booking ─────────────────────────────────────────────────────────
 
 @router.post("/bookings/{booking_id}/cancel")

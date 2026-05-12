@@ -110,13 +110,13 @@ async def zones_search(zone_id: str):
             .table("zone_2gis_cache")
             .select("items, fetched_at")
             .eq("zone_id", zone_id)
-            .maybe_single()
             .execute()
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    if not result.data:
+    rows = result.data or []
+    if not rows:
         return {
             "zone_id":    zone_id,
             "count":      0,
@@ -125,12 +125,12 @@ async def zones_search(zone_id: str):
             "cache_miss": True,
         }
 
-    items = result.data["items"]
+    items = rows[0]["items"]
     return {
         "zone_id":    zone_id,
         "count":      len(items),
         "items":      items,
-        "fetched_at": result.data["fetched_at"],
+        "fetched_at": rows[0]["fetched_at"],
         "cache_miss": False,
     }
 

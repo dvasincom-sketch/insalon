@@ -816,7 +816,7 @@ async def refresh_zones(data: dict = Body(...)):
                 "q": "массаж",
                 "point": f"{lon},{lat}",
                 "radius": radius,
-                "page_size": 100,
+                "page_size": 15,
                 "fields": "items.point,items.address,items.rating,items.reviews_count,items.rubrics",
                 "key": key,
                 "locale": "ru_RU",

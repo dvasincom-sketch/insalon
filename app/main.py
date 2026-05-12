@@ -8,8 +8,7 @@ import os
 
 load_dotenv()
 
-from app.routers import sync, analytics, oauth, webhooks, checks, payroll, booking, payments, dev_sessions, lovi, auth
-
+from app.routers import sync, analytics, oauth, webhooks, checks, payroll, booking, payments, dev_sessions, lovi, auth, zones
 app = FastAPI(
     title="Insalon API",
     description="API для управленческой аналитики салонов на базе YCLIENTS",
@@ -50,6 +49,7 @@ app.include_router(payments.router)
 app.include_router(dev_sessions.router)
 app.include_router(lovi.router)
 app.include_router(auth.router)
+app.include_router(zones.router)
 
 # Статические файлы дашборда
 if os.path.exists("static"):

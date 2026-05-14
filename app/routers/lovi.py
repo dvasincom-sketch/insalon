@@ -69,6 +69,60 @@ def _dedup_items(items: list[dict]) -> list[dict]:
     return result
 
 
+def _dist_sq(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Квадрат евклидова расстояния (достаточно для сравнения, без sqrt)."""
+    return (lat1 - lat2) ** 2 + (lon1 - lon2) ** 2
+
+
+def _dedup_across_zones(zone_payloads: dict[str, dict]) -> dict[str, dict]:
+    """
+    Глобальная дедупликация между зонами по dgis_id.
+    Если один объект попал в несколько зон — оставляем его только
+    в той зоне, центр которой ближе к координатам объекта.
+    zone_payloads: { zone_id: {"count": int, "items": list} }
+    Возвращает тот же формат с очищенными items и пересчитанным count.
+    """
+    # Собираем dgis_id → список (zone_id, dist_sq)
+    dgis_to_zones: dict[str, list[tuple[str, float]]] = {}
+
+    for zone_id, payload in zone_payloads.items():
+        cfg = ZONE_CONFIG.get(zone_id, {})
+        center_lat = cfg.get("lat")
+        center_lon = cfg.get("lon")
+        if center_lat is None or center_lon is None:
+            continue
+        for item in payload.get("items", []):
+            dgis_id = item.get("dgis_id")
+            if not dgis_id:
+                continue
+            item_lat = item.get("lat")
+            item_lon = item.get("lon")
+            if item_lat is None or item_lon is None:
+                # Нет координат — оставляем в первой встреченной зоне
+                if dgis_id not in dgis_to_zones:
+                    dgis_to_zones[dgis_id] = [(zone_id, 0.0)]
+                continue
+            d = _dist_sq(item_lat, item_lon, center_lat, center_lon)
+            dgis_to_zones.setdefault(dgis_id, []).append((zone_id, d))
+
+    # Для каждого dgis_id определяем зону-победителя (минимальное расстояние)
+    winner: dict[str, str] = {}
+    for dgis_id, candidates in dgis_to_zones.items():
+        best_zone = min(candidates, key=lambda x: x[1])[0]
+        winner[dgis_id] = best_zone
+
+    # Фильтруем items в каждой зоне
+    result = {}
+    for zone_id, payload in zone_payloads.items():
+        filtered = [
+            item for item in payload.get("items", [])
+            if winner.get(item.get("dgis_id"), zone_id) == zone_id
+        ]
+        result[zone_id] = {"count": len(filtered), "items": filtered}
+
+    return result
+
+
 async def _fetch_2gis_zone(
     client: httpx.AsyncClient,
     zone_id: str,
@@ -1251,8 +1305,8 @@ async def refresh_zones(data: dict = Body(...)):
 
     fetch_results = await asyncio.gather(*[fetch_zone(z) for z in zones_input])
 
-    to_upsert = []
-    saved     = {}
+    # Собираем payload всех успешно загруженных зон
+    raw_payloads: dict[str, dict] = {}
     errors    = []
 
     for result in fetch_results:
@@ -1261,16 +1315,35 @@ async def refresh_zones(data: dict = Body(...)):
         zone_id, payload, err = result
         if err:
             errors.append({"zone_id": zone_id, "error": err})
+        if payload is not None:
+            raw_payloads[zone_id] = payload
+
+    # Глобальная дедупликация: объект остаётся только в ближайшей зоне
+    deduped_payloads = _dedup_across_zones(raw_payloads)
+
+    to_upsert = []
+    saved     = {}
+
+    for result in fetch_results:
+        if result is None:
+            continue
+        zone_id, payload, _ = result
         if payload is None:
+            saved[zone_id] = {"count": cached_counts.get(zone_id, 0), "skipped": True}
+            continue
+        final = deduped_payloads.get(zone_id, payload)
+        # Предохранитель: не перезаписываем если стало меньше кэша
+        if final["count"] < cached_counts.get(zone_id, 0):
+            print(f"[ZONES] {zone_id}: после глобального dedup {final['count']} < кэш {cached_counts.get(zone_id,0)}, сохранён старый")
             saved[zone_id] = {"count": cached_counts.get(zone_id, 0), "skipped": True}
             continue
         to_upsert.append({
             "zone_id":    zone_id,
-            "count":      payload["count"],
-            "items":      payload["items"],
+            "count":      final["count"],
+            "items":      final["items"],
             "fetched_at": now_iso,
         })
-        saved[zone_id] = {"count": payload["count"], "fetched_at": now_iso}
+        saved[zone_id] = {"count": final["count"], "fetched_at": now_iso}
 
     to_upsert = [r for r in to_upsert if r['count'] > 0]
     if to_upsert:

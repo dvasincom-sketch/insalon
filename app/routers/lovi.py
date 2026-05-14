@@ -90,7 +90,7 @@ async def _fetch_2gis_zone(
             "q": "массаж",
             "point": f"{lon + dlon},{lat + dlat}",
             "radius": radius,
-            "fields": "items.point,items.address_name,items.reviews,items.rubrics,items.id",
+            "fields": "items.point,items.address_name,items.reviews,items.rubrics,items.id,items.contact_groups",
             "key": key,
             "locale": "ru_RU",
         }
@@ -126,6 +126,12 @@ async def _fetch_2gis_zone(
                 "lat":           item_lat,
                 "lon":           item_lon,
                 "rubrics":       [r["name"] for r in (it.get("rubrics") or [])[:3]],
+                "phones":        [
+                    c["value"]
+                    for cg in (it.get("contact_groups") or [])
+                    for c in (cg.get("contacts") or [])
+                    if c.get("type") == "phone"
+                ],
             })
 
     return zone_id, _dedup_items(all_items), None

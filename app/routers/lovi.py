@@ -711,6 +711,137 @@ async def city_partner_request(data: dict = Body(...)):
     return {"ok": True}
 
 
+# ── Waitlist (главная → «Записаться на запуск») ───────────────────────────
+
+ADMIN_EMAIL = "dvasin.com@gmail.com"
+
+@router.post("/waitlist")
+async def lovi_waitlist(data: dict = Body(...)):
+    import os, resend as _resend
+    from app.emails.utils import render_template
+
+    email = (data.get("email") or "").strip().lower()
+    kind  = (data.get("kind")  or "user").strip()
+
+    if not email or "@" not in email:
+        raise HTTPException(status_code=422, detail="valid email is required")
+
+    try:
+        supabase.table("lovi_waitlist").upsert(
+            {"email": email, "kind": kind, "source": "home_hero"},
+            on_conflict="email",
+            ignore_duplicates=True,
+        ).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    try:
+        _resend.api_key = os.getenv("RESEND_API_KEY")
+
+        html_user = render_template(
+            template="waitlist_user",
+            subject="Вы в списке — «Лови»",
+            email=email,
+        )
+        _resend.Emails.send({
+            "from": "«Лови» <noreply@lovi.today>",
+            "to": email,
+            "subject": "Вы в списке — напишем одним письмом на запуске",
+            "html": html_user,
+        })
+
+        html_admin = render_template(
+            template="waitlist_admin",
+            subject="Новая подписка — «Лови»",
+            email=ADMIN_EMAIL,
+            user_email=email,
+        )
+        _resend.Emails.send({
+            "from": "«Лови» <noreply@lovi.today>",
+            "to": ADMIN_EMAIL,
+            "subject": f"Новая подписка: {email}",
+            "html": html_admin,
+        })
+
+    except Exception as e:
+        import logging; logging.error(f"waitlist email error: {e}")
+
+    return {"ok": True}
+
+
+# ── Partner Leads (главная → «Подать заявку») ─────────────────────────────
+
+@router.post("/partner-leads")
+async def lovi_partner_leads(data: dict = Body(...)):
+    import os, resend as _resend
+    from app.emails.utils import render_template
+
+    salon     = (data.get("salon")     or "").strip()
+    name      = (data.get("name")      or "").strip()
+    contact   = (data.get("contact")   or "").strip()
+    zone_id   = (data.get("zone_id")   or "").strip() or None
+    zone_name = (data.get("zone_name") or "").strip() or "не указана"
+
+    if not salon:   raise HTTPException(422, "salon is required")
+    if not name:    raise HTTPException(422, "name is required")
+    if not contact: raise HTTPException(422, "contact is required")
+
+    try:
+        supabase.table("lovi_partner_leads").insert({
+            "salon":     salon,
+            "name":      name,
+            "contact":   contact,
+            "zone_id":   zone_id,
+            "zone_name": zone_name,
+            "source":    "home_partner_callout",
+        }).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    user_email = contact if "@" in contact else None
+
+    try:
+        _resend.api_key = os.getenv("RESEND_API_KEY")
+
+        if user_email:
+            html_user = render_template(
+                template="partner_lead_user",
+                subject="Заявка принята — «Лови»",
+                email=user_email,
+                name=name,
+                salon=salon,
+                zone_name=zone_name,
+                slots=2,
+            )
+            _resend.Emails.send({
+                "from": "«Лови» <noreply@lovi.today>",
+                "to": user_email,
+                "subject": "Заявка принята — свяжемся в течение 1–2 рабочих дней",
+                "html": html_user,
+            })
+
+        html_admin = render_template(
+            template="partner_lead_admin",
+            subject="Новая заявка партнёра — «Лови»",
+            email=ADMIN_EMAIL,
+            name=name,
+            salon=salon,
+            contact=contact,
+            zone_name=zone_name,
+        )
+        _resend.Emails.send({
+            "from": "«Лови» <noreply@lovi.today>",
+            "to": ADMIN_EMAIL,
+            "subject": f"Новая заявка: {salon} · {zone_name}",
+            "html": html_admin,
+        })
+
+    except Exception as e:
+        import logging; logging.error(f"partner_lead email error: {e}")
+
+    return {"ok": True}
+
+
 # ── Connect (YCLIENTS marketplace) ────────────────────────────────────────
 
 @router.post("/connect")

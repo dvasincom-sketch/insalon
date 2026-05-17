@@ -55,36 +55,41 @@ async function loadSchedule() {
     const isWeekend = col >= 5;
     const bgClass   = isWeekend ? 'bg-light' : '';
     const shifts    = byDay[day] || [];
-    const shiftsHtml = shifts.map(s =>
+    const shiftsHtml = shifts.filter(s => !s.is_visit_only).map(s =>
       `<span class="badge bg-secondary text-white d-block mb-1">${s.staff_name}</span>`
     ).join('');
 
-    const couplePrograms = coupleDays[day] || [];
-    const realShifts     = shifts.filter(s => !s.is_visit_only);
-    const shiftNames     = realShifts.map(s => s.staff_name);
-    const isSingleShift  = realShifts.length === 1;
-    const visitRecords   = visitDays[day] || [];
+    const couplePrograms    = coupleDays[day] || [];
+    const realShifts        = shifts.filter(s => !s.is_visit_only);
+    const shiftNames        = realShifts.map(s => s.staff_name);
+    const isSingleShift     = realShifts.length === 1;
+    const visitRecords      = visitDays[day] || [];
+    const payrollShiftNames = payrollShifts[day] || [];
+    const payrollVisitList  = payrollVisits[day] || [];
 
-    const coupleHtml = (couplePrograms.length > 0 && isSingleShift && visitRecords.length === 0)
+    // couple_days показываем только если нет данных из payroll и visit_records
+    const coupleHtml = (couplePrograms.length > 0 && payrollVisitList.length === 0 && visitRecords.length === 0)
       ? `<div class="mt-1 border-top pt-1">${couplePrograms.map(c => {
           const payStr = c.visit_pay ? ' — ' + c.visit_pay.toLocaleString('ru-RU') + ' ₽' : '';
-          return `<span class="badge bg-pink-lt d-block mb-1" title="${c.service_title} (${c.duration_min} мин)">♥ ? неизвестен${payStr}</span>`;
+          const name   = c.staff_name || '? неизвестен';
+          return `<span class="badge bg-pink-lt d-block mb-1" title="${c.service_title} (${c.duration_min} мин)">♥ ${name}${payStr}</span>`;
         }).join('')}</div>`
       : '';
 
     const conflictInShift = visitRecords.filter(v => shiftNames.includes(v.staff_name));
-    const visitHtml = visitRecords.length > 0
-      ? `<div class="mt-1 border-top pt-1">${visitRecords.map(v => {
-          const payStr      = v.visit_pay ? ' — ' + v.visit_pay.toLocaleString('ru-RU') + ' ₽' : '';
-          const isConflict  = shiftNames.includes(v.staff_name);
-          const badgeClass  = isConflict ? 'bg-red text-white' : 'bg-pink-lt';
-          const conflictTitle = isConflict ? ' ⚠ также в смене!' : '';
-          return `<span class="badge ${badgeClass} d-block mb-1" title="${v.service_title}${conflictTitle}">♥ ${v.staff_name}${payStr}${isConflict ? ' ⚠' : ''}</span>`;
+    // Выходы под запись: сначала из visit_records, если нет — из payroll.notes
+    const visitSource = visitRecords.length > 0
+      ? visitRecords.map(v => ({ staff_name: v.staff_name, visit_pay: v.visit_pay, source: 'visit' }))
+      : payrollVisitList.map(v => ({ staff_name: v.staff_name, visit_pay: v.pay, source: 'payroll' }));
+
+    const visitHtml = visitSource.length > 0
+      ? `<div class="mt-1 border-top pt-1">${visitSource.map(v => {
+          const payStr     = v.visit_pay ? ' — ' + v.visit_pay.toLocaleString('ru-RU') + ' ₽' : '';
+          const isConflict = shiftNames.includes(v.staff_name);
+          const badgeClass = isConflict ? 'bg-red text-white' : 'bg-pink-lt';
+          return `<span class="badge ${badgeClass} d-block mb-1">♥ ${v.staff_name}${payStr}${isConflict ? ' ⚠' : ''}</span>`;
         }).join('')}</div>`
       : '';
-
-    const payrollShiftNames = payrollShifts[day] || [];
-    const payrollVisitList  = payrollVisits[day] || [];
 
     const conflicts = [];
     shiftNames.forEach(name => {

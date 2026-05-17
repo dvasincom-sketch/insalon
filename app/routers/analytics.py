@@ -431,21 +431,127 @@ async def get_cmph():
         return {"error": str(e), "trace": traceback.format_exc()}
 
 
+@router.get("/staff/monthly", summary="Динамика метрик по месяцам")
+async def staff_monthly(months: int = 6):
+    try:
+        from app.database import supabase
+        from datetime import datetime, timedelta
+        from collections import defaultdict
+        import calendar
+
+        result = []
+        now = datetime.now()
+
+        for i in range(months - 1, -1, -1):
+            # Определяем период
+            d = datetime(now.year, now.month, 1) - timedelta(days=1) if i == 0 else None
+            yr = now.year
+            mo = now.month - i
+            while mo <= 0:
+                mo += 12
+                yr -= 1
+
+            date_from = f"{yr}-{mo:02d}-01"
+            last_day = calendar.monthrange(yr, mo)[1]
+            # Для текущего месяца берём до сегодня
+            if yr == now.year and mo == now.month:
+                date_to = now.strftime("%Y-%m-%d")
+            else:
+                date_to = f"{yr}-{mo:02d}-{last_day}"
+
+            month_label = datetime(yr, mo, 1).strftime("%b %Y")
+
+            # Records
+            records = supabase.table("records").select(
+                "date, staff_name, service_cost, is_fitmost, duration, service_title"
+            ).eq("company_id", COMPANY_ID).eq("attendance", 1).eq(
+                "is_fitmost", False
+            ).gte("date", date_from).lte("date", date_to).execute()
+
+            # Transactions
+            transactions = supabase.table("transactions").select(
+                "date, amount"
+            ).eq("company_id", COMPANY_ID).gte("date", date_from).lte(
+                "date", date_to
+            ).gt("amount", 0).ilike("type_title", "%услуг%").execute()
+
+            # Shifts
+            shifts_data = supabase.table("shifts").select(
+                "date, staff_name"
+            ).eq("company_id", COMPANY_ID).gte("date", date_from).lte("date", date_to).execute()
+
+            shifts_by_day = defaultdict(set)
+            for s in shifts_data.data:
+                shifts_by_day[s["date"]].add(s["staff_name"])
+
+            revenue_by_day = defaultdict(float)
+            for t in transactions.data:
+                revenue_by_day[t["date"][:10]] += float(t["amount"] or 0)
+
+            # Агрегируем по дням
+            daily = defaultdict(lambda: {"revenue": 0, "staff": ""})
+            for r in records.data:
+                day = r["date"][:10]
+                staff = r["staff_name"]
+                key = f"{day}|{staff}"
+                daily[key]["staff"] = staff
+                daily[key]["day"] = day
+
+            SHIFT_PAY = 5000
+            total_revenue = 0
+            total_shifts = 0
+            profitable = 0
+
+            for key, d in daily.items():
+                day = d["day"]
+                staff_count = len(shifts_by_day.get(day, set()))
+                rev = revenue_by_day[day] / 2 if staff_count >= 2 else revenue_by_day[day]
+                d["revenue"] = rev
+                total_revenue += rev
+                total_shifts += 1
+                if rev >= SHIFT_PAY * 2:
+                    profitable += 1
+
+            avg_revenue = round(total_revenue / total_shifts) if total_shifts else 0
+            coefficient = round(avg_revenue / SHIFT_PAY, 1) if avg_revenue else 0
+            salary_pct = round(SHIFT_PAY / avg_revenue * 100) if avg_revenue else 0
+            profitable_pct = round(profitable / total_shifts * 100) if total_shifts else 0
+
+            result.append({
+                "month": month_label,
+                "period": f"{yr}-{mo:02d}",
+                "coefficient": coefficient,
+                "salary_pct": salary_pct,
+                "profitable_pct": profitable_pct,
+                "avg_revenue": avg_revenue,
+                "shifts": total_shifts,
+                "is_current": yr == now.year and mo == now.month
+            })
+
+        return {"months": result}
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "trace": traceback.format_exc()}
+
+
 @router.get("/staff/daily", summary="Эффективность мастеров по дням")
-async def staff_daily(days: int = 30):
+async def staff_daily(days: int = 30, date_from: str = None, date_to: str = None):
     try:
         from app.database import supabase
         from datetime import datetime, timedelta
         from collections import defaultdict
 
-        date_from = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        if not date_from:
+            date_from = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        if not date_to:
+            date_to = datetime.now().strftime("%Y-%m-%d")
 
         # Записи для нагрузки и длительности
         records = supabase.table("records").select(
             "date, staff_name, service_cost, is_fitmost, duration, client_name, service_title"
         ).eq("company_id", COMPANY_ID).eq(
             "attendance", 1
-        ).eq("is_fitmost", False).gte("date", date_from).execute()
+        ).eq("is_fitmost", False).gte("date", date_from).lte("date", date_to).execute()
 
         # Прайс услуг со скидкой абонемента 30% (5 сеансов)
         services_data = supabase.table("services").select(
@@ -462,7 +568,7 @@ async def staff_daily(days: int = 30):
             "date, amount, account, type_title, client_name"
         ).eq("company_id", COMPANY_ID).gte(
             "date", date_from
-        ).gt("amount", 0).ilike("type_title", "%услуг%").execute()
+        ).lte("date", date_to).gt("amount", 0).ilike("type_title", "%услуг%").execute()
 
         # Выручка по дням из транзакций (только услуги)
         revenue_by_day = defaultdict(float)
@@ -500,7 +606,7 @@ async def staff_daily(days: int = 30):
                 # Берём количество мастеров из таблицы shifts
         shifts_data = supabase.table("shifts").select(
             "date, staff_name, is_double_shift"
-        ).eq("company_id", COMPANY_ID).gte("date", date_from).execute()
+        ).eq("company_id", COMPANY_ID).gte("date", date_from).lte("date", date_to).execute()
 
         from collections import defaultdict as dd2
         shifts_by_day = dd2(set)
@@ -586,11 +692,21 @@ async def get_shifts(year: int, month: int):
         date_from = f"{year}-{month:02d}-01"
         date_to = f"{year}-{month:02d}-{last_day}"
 
-        data = supabase.table("shifts").select("*").eq(
+        # Основные смены (не выходы под запись)
+        shifts = supabase.table("shifts").select("*").eq(
             "company_id", COMPANY_ID
-        ).gte("date", date_from).lte("date", date_to).order("date").execute()
+        ).gte("date", date_from).lte("date", date_to).eq(
+            "is_visit_only", False
+        ).order("date").execute()
 
-        return {"year": year, "month": month, "shifts": data.data}
+        # Выходы под запись отдельно
+        visits = supabase.table("shifts").select("*").eq(
+            "company_id", COMPANY_ID
+        ).gte("date", date_from).lte("date", date_to).eq(
+            "is_visit_only", True
+        ).order("date").execute()
+
+        return {"year": year, "month": month, "shifts": shifts.data, "visits": visits.data}
     except Exception as e:
         import traceback
         return {"error": str(e), "trace": traceback.format_exc()}
@@ -773,10 +889,10 @@ async def get_payroll_schedule(year: int, month: int):
 
     result = supabase.table("payroll")\
         .select("staff_name, period_start, period_end, notes")\
-        .eq("company_id", COMPANY_ID)\
         .gte("period_start", date_from)\
-        .lte("period_end", date_to)\
+        .lte("period_start", date_to)\
         .execute()
+    print(f"[PAYROLL-SCHEDULE] {date_from} to {date_to} found={len(result.data)} data={result.data}")
 
     shifts_by_day = {}
     visits_by_day = {}

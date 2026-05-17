@@ -38,7 +38,25 @@ function validatePayrollNotes(p) {
   ).join('') + '</div>';
 }
 
+function initPayrollMonthFilter() {
+  const sel = document.getElementById('payroll-filter-month');
+  if (!sel || sel.options.length > 1) return;
+  sel.innerHTML = '<option value="">Все месяцы</option>';
+  const now = new Date();
+  const months = [
+    'Январь','Февраль','Март','Апрель','Май','Июнь',
+    'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'
+  ];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const val = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const label = months[d.getMonth()] + ' ' + d.getFullYear();
+    sel.appendChild(new Option(label, val));
+  }
+}
+
 async function loadPayroll() {
+  initPayrollMonthFilter();
   const staff   = document.getElementById('payroll-filter-staff')?.value  || '';
   const monthVal = document.getElementById('payroll-filter-month')?.value || '';
   const period  = document.getElementById('payroll-filter-period')?.value || '';

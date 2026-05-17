@@ -1,6 +1,24 @@
 // ============ СТАТУС ПРОВЕРОК ============
 
+function initChecksMonthFilter() {
+  const sel = document.getElementById('checks-filter-month');
+  if (!sel || sel.options.length > 1) return;
+  sel.innerHTML = '<option value="">Все месяцы</option>';
+  const now = new Date();
+  const months = [
+    'Январь','Февраль','Март','Апрель','Май','Июнь',
+    'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'
+  ];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const val = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const label = months[d.getMonth()] + ' ' + d.getFullYear();
+    sel.appendChild(new Option(label, val));
+  }
+}
+
 async function loadChecks() {
+  initChecksMonthFilter();
   const monthVal = document.getElementById('checks-filter-month')?.value || '';
   if (!monthVal) {
     document.getElementById('checks-body').innerHTML = '<p class="text-muted">Выберите месяц для проверки</p>';

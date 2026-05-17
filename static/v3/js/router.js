@@ -42,7 +42,7 @@ function showScreen(name, tab) {
 
   // Lazy-load
   if (name === 'pl'          && !plLoaded)     { loadPL();          plLoaded     = true; }
-  if (name === 'staff'       && !staffLoaded)  { loadStaff();       staffLoaded  = true; }
+  if (name === 'staff') { loadStaffMonthly(); staffLoaded = true; }
   if (name === 'obligations' && !oblLoaded)    { loadObligations(); oblLoaded    = true; }
   if (name === 'devlog'      && !devlogLoaded) { loadDevLog();      devlogLoaded = true; }
 

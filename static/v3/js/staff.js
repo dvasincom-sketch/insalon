@@ -1,8 +1,13 @@
 // ============ СОТРУДНИКИ ============
 
 async function loadStaff() {
-  const days = document.getElementById('efficiency-days')?.value || 30;
-  const daily = await fetchData('/analytics/staff/daily?days=' + days);
+  const sel = document.getElementById('efficiency-month');
+  const selectedMonth = sel?.value || new Date().toISOString().slice(0, 7);
+  const [yr, mo] = selectedMonth.split('-').map(Number);
+  const dateFrom = selectedMonth + '-01';
+  const lastDay = new Date(yr, mo, 0);
+  const dateTo = lastDay.getFullYear() + '-' + String(lastDay.getMonth() + 1).padStart(2, '0') + '-' + String(lastDay.getDate()).padStart(2, '0');
+  const daily = await fetchData('/analytics/staff/daily?date_from=' + dateFrom + '&date_to=' + dateTo);
   if (!daily || !daily.days) return;
 
   const byStaff = {};
@@ -31,6 +36,12 @@ async function loadStaff() {
   const avgCoef         = Math.round(totalRevenue / totalShifts / 5000 * 10) / 10;
   const salaryPct       = Math.round(5000 / avgRevenue * 100);
   const profitablePct   = Math.round(profitableShifts / totalShifts * 100);
+
+
+
+  // Обновляем заголовок таблицы по выбранному месяцу
+  const selEl = document.getElementById('efficiency-month');
+  const monthLabel = selEl ? selEl.options[selEl.selectedIndex]?.text : '';
 
   document.getElementById('staff-cards').innerHTML = `
     <div class="col-12">
@@ -76,7 +87,7 @@ async function loadStaff() {
     <div class="col-12">
       <div class="card mb-3">
         <div class="card-header">
-          <h3 class="card-title">Эффективность мастеров — последние 30 дней</h3>
+          <h3 class="card-title">Эффективность мастеров — ${monthLabel}</h3>
         </div>
         <div class="table-responsive">
           <table class="table table-vcenter card-table">
@@ -159,4 +170,90 @@ async function loadStaff() {
         </div>
       </div>
     </div>`;
+}
+
+
+async function loadStaffMonthly() {
+  const data = await fetchData('/analytics/staff/monthly?months=6');
+  if (!data || !data.months) return;
+
+  const months = data.months;
+  const labels   = months.map(m => m.month + (m.is_current ? ' *' : ''));
+  const coefData   = months.map(m => m.coefficient);
+  const salaryData = months.map(m => m.salary_pct);
+  const profitData = months.map(m => m.profitable_pct);
+  const avgRevData = months.map(m => Math.round(m.avg_revenue / 1000 * 10) / 10);
+
+  // Рендерим селектор один раз
+  const wrapper = document.getElementById('efficiency-month-wrapper');
+  if (wrapper && !document.getElementById('efficiency-month')) {
+    wrapper.innerHTML = `
+      <div class="px-3 pt-3 pb-0 d-flex align-items-center gap-2">
+        <label class="text-muted small mb-0">Месяц:</label>
+        <select class="form-select form-select-sm w-auto" id="efficiency-month" onchange="loadStaff()"></select>
+      </div>`;
+    const sel2 = document.getElementById('efficiency-month');
+    const now2 = new Date();
+    for (let i = 0; i < 6; i++) {
+      const d2 = new Date(now2.getFullYear(), now2.getMonth() - i, 1);
+      const val2 = d2.getFullYear() + '-' + String(d2.getMonth() + 1).padStart(2, '0');
+      const label2 = d2.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+      const opt2 = new Option(label2, val2);
+      if (i === 0) opt2.selected = true;
+      sel2.appendChild(opt2);
+    }
+  }
+
+  // Рендерим график только если его ещё нет
+  const chartWrapper = document.getElementById('staff-monthly-chart-wrapper');
+  if (chartWrapper && !document.getElementById('staff-monthly-chart')) {
+    chartWrapper.innerHTML = `
+      <div class="px-3 pt-2">
+        <div class="card mb-3">
+          <div class="card-header">
+            <h3 class="card-title">Динамика метрик по месяцам</h3>
+            <div class="card-options"><span class="text-muted small">* текущий месяц (неполные данные)</span></div>
+          </div>
+          <div class="card-body">
+            <div id="staff-monthly-chart"></div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  // Загружаем данные за выбранный месяц
+  loadStaff();
+
+  new ApexCharts(document.getElementById('staff-monthly-chart'), {
+    series: [
+      { name: 'ЗП от выручки (%)', data: salaryData },
+      { name: 'Прибыльных смен (%)', data: profitData },
+      { name: 'Ср. выручка (тыс ₽)', data: avgRevData },
+    ],
+    chart: { type: 'line', height: 280, toolbar: { show: false }, animations: { enabled: false } },
+    stroke: { width: 2, curve: 'smooth' },
+    markers: { size: 4 },
+    xaxis: { categories: labels },
+    yaxis: [
+      { seriesName: 'ЗП от выручки (%)', title: { text: '%' }, min: 0, max: 100 },
+      { seriesName: 'Прибыльных смен (%)', show: false },
+      { seriesName: 'Ср. выручка (тыс ₽)', opposite: true, title: { text: 'тыс ₽' }, min: 0 },
+    ],
+    colors: ['#d63939', '#2fb344', '#f76707'],
+    legend: { position: 'top' },
+    tooltip: {
+      shared: true,
+      y: [
+        { formatter: v => v + '%' },
+        { formatter: v => v + '%' },
+        { formatter: v => v + 'К ₽' },
+      ]
+    },
+    annotations: {
+      yaxis: [
+        { y: 35, borderColor: '#d63939', borderWidth: 1, strokeDashArray: 4, label: { text: 'норма 35%', style: { color: '#d63939', fontSize: '11px' } } },
+        { y: 70, borderColor: '#2fb344', borderWidth: 1, strokeDashArray: 4, label: { text: 'норма 70%', style: { color: '#2fb344', fontSize: '11px' } } },
+      ]
+    }
+  }).render();
 }

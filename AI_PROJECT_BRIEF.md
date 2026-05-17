@@ -1048,3 +1048,311 @@ SUPABASE_URL=https://qtxnpnioobocidbujbja.supabase.co
 
 ### Структура v3/js/
 config.js → utils.js → api.js → router.js → pulse.js → pl.js → staff.js → schedule.js → payroll.js → checks.js → obligations.js → modal.js → fot.js → main.js
+
+## Эталонная дизайн-система
+`src/pages/UI.jsx` — единственный источник правды для всех компонентов.
+**Правило:** перед созданием любого нового элемента — смотреть в UI.jsx.
+**Новые компоненты** после одобрения переносятся в UI.jsx.
+ 
+### Что есть в UI.jsx (актуально на 2026-05-11)
+| Секция | id |
+|--------|----|
+| Цвета | `colors` |
+| Типографика | `typography` |
+| Иконки (40+) | `icons` |
+| Tooltip / Tip | `tooltip` |
+| Кнопки | `buttons` |
+| Бейджи | `badges` |
+| Инпуты + Chips | `inputs` |
+| Карточки (Sub/Dark/Pass) | `cards` |
+| Nav Moods | `nav-moods` |
+| Live Status | `live-status` |
+| Slot Card (стопка) | `slot-card` |
+| Таймер (normal/urgent) | `timer` |
+| Toggle | `toggle` |
+| Pill / Tag (статусы) | `pills` |
+| Counter +/− + Калькулятор | `counter` |
+| Drawer (right + bottom) | `drawer` |
+| Accordion | `accordion` |
+| Hero (dark + light) | `hero` |
+| Feature-блоки (light + dark) | `features` |
+| Шаги / Нумерация | `steps` |
+| Timeline / Roadmap | `timeline` |
+| Отзывы | `testimonials` |
+| Логотип-строка | `logo-row` |
+| Сетки (2/3/4-col + bento) | `grids` |
+| Таблица сравнения | `comparison-table` |
+| Карточки статей | `article-card` |
+| CTA-секции | `cta` |
+| Форма заявки | `form` |
+| shadcn (Dialog/DatePicker/Select/Toast/Skeleton/Sheet/Tabs/Avatar) | `planned` |
+ 
+## Страницы проекта
+| URL | Файл | Layout |
+|-----|------|--------|
+| `/` | `Home.jsx` (inline) | собственный Nav+Footer |
+| `/ui` | `pages/UI.jsx` | без layout |
+| `/about` | `pages/About.jsx` | PageWithLayout |
+| `/pass` | `pages/Pass.jsx` | PageWithLayout |
+| `/partners` | `pages/Partners.jsx` | PageWithLayout |
+| `/privacy` | `pages/Privacy.jsx` | PageWithLayout |
+| `/offer` | `pages/Offer.jsx` | PageWithLayout |
+| `/library` | `pages/Library.jsx` | PageWithLayout |
+| `/research` | `pages/Research.jsx` | PageWithLayout |
+| `/research/dataset` | `pages/Dataset.jsx` | PageWithLayout |
+| `/investor` | `pages/Investorlanding.jsx` | PageWithLayout |
+| `/PartnerLanding` | `pages/PartnerLanding.jsx` | PageWithLayout |
+| `/zone-map` | `pages/ZoneMap.jsx` | standalone (нет Nav/Footer) |
+| `/my-bookings` | `components/MyBookings.jsx` | собственный |
+| `/salon/dashboard` | `pages/SalonDashboard.jsx` | без layout |
+| `/salon/login` | `pages/SalonLogin.jsx` | без layout |
+| `/salon/auth` | `pages/SalonAuth.jsx` | без layout |
+| `/salon/onboarding` | `pages/SalonOnboarding.jsx` | без layout |
+| `/confirm` | `pages/Confirm.jsx` | без layout |
+| `/reset-password` | `pages/ResetPassword.jsx` | без layout |
+| `/connect` | `pages/Connect.jsx` | без layout |
+| `/unsubscribe` | `pages/Unsubscribe.jsx` | без layout |
+ 
+## Компоненты
+| Файл | Назначение |
+|------|-----------|
+| `components/Nav.jsx` | Навигация. Лого → `/`. City picker. Auth. |
+| `components/Footer.jsx` | Футер. B2C (левая) + B2B (правая) зоны. |
+| `components/ScrollToTop.jsx` | Скролл вверх + якорный скролл через MutationObserver + sessionStorage |
+| `components/HeroNew.jsx` | Hero главной |
+| `components/BentoGrid.jsx` | id="featured" |
+| `components/AllSlots.jsx` | id="slots" |
+| `components/Ticker.jsx` | Бегущая строка |
+| `components/ValueCard.jsx` | Поиск |
+ 
+## Библиотека статей (Library)
+`src/pages/Library.jsx` — список 12 статей, drawer справа (`slideInRight`).
+`src/pages/articles/Article01.jsx` — опубликована (Chen et al. 1998, González 2016).
+`src/pages/articles/Article02.jsx`...`Article12.jsx` — заглушки, готовятся.
+ 
+**Именование файлов:** строго `PascalCase` для компонентов/страниц, `camelCase` для хуков/утилит/папок.
+Render (Ubuntu) case-sensitive → нарушение = сломанный деплой.
+ 
+## Хуки
+| Файл | Назначение |
+|------|-----------|
+| `hooks/useIsMobile.js` | `window.innerWidth < 768`, resize listener |
+| `hooks/useAnchorScroll.js` | устарел, логика перенесена в ScrollToTop |
+ 
+## Якорный скролл между страницами
+`sessionStorage.setItem('scrollTo', id)` → `navigate('/')` →
+`ScrollToTop.jsx` читает ключ, ждёт элемент через `MutationObserver`, скроллит.
+ 
+## Footer навигация
+```
+B2C зона (светлее):          B2B зона (темнее):
+• На странице (якоря)        • Партнёрам
+• Сервис:                    • Контакты: hello@lovi.today
+  - О сервисе                • Сотрудничество:
+  - Lovi Pass                  - Инвесторам → /investor
+  - Мои брони                  - Маркетологам → /research
+  - Библиотека → /library      - Исследователям → /research/dataset
+```
+ 
+## Аналитика зон (внутренний инструмент)
+`/zone-map` — `ZoneMap.jsx` (standalone, без Nav/Footer).
+Бэкенд: `insalon/routes/zones2gis.js` → прокси к 2GIS Catalog API.
+Env: `DGIS_API_KEY` в `.env` insalon-репо.
+API: `GET https://insalon.onrender.com/api/lovi/zones/search?lat=&lon=&radius=&q=массаж`
+ 
+## Правила работы с AI
+1. **Перед генерацией кода** — дать план и ждать подтверждения
+2. **Не трогать** существующий контент если не попросили явно
+3. **Точечные правки** через `str_replace`, не переписывать файл целиком
+4. **Именование:** PascalCase компоненты, camelCase хуки/утилиты
+5. **CSS:** только через CSS-переменные (`var(--accent)` etc.), no hardcode цветов
+6. **Мобайл:** всегда через `useIsMobile()` хук
+7. **Иконки:** только `lucide-react` через `<Icon>` helper, никаких эмодзи
+8. **Коммит после каждого файла:** `git add . && git commit -m "..." && git push`
+
+# Дизайн-система «Quiet Luxury»
+
+```css
+--bg:        #FDFCF9   /* Cashmere White */
+--dark:      #121A12   /* Deep Forest */
+--accent:    #F97316   /* Lovi Orange */
+--border:    rgba(18,26,18,0.06)
+--secondary: #8F8475   /* Muted Taupe */
+```
+
+Шрифты: Playfair Display (заголовки) + Inter (интерфейс)
+
+---
+
+## Архитектура Frontend
+
+### Роуты (App.jsx)
+| Путь | Компонент | Описание |
+|------|-----------|----------|
+| / | Home | Главная: HeroNew → BentoGrid → AllSlots → Hero → ValueCard → Ticker → Footer |
+| /my-bookings | MyBookings | Брони клиента, открывает AuthModal без токена |
+| /confirm | Confirm | Подтверждение оплаты |
+| /reset-password | ResetPassword | Сброс пароля |
+| /connect | Connect | YCLIENTS marketplace connect |
+| /salon/dashboard | SalonDashboard | Кабинет партнёра |
+| /salon/onboarding | SalonOnboarding | Онбординг (устарел, теперь drawer в dashboard) |
+| /salon/login | SalonLogin | Вход в кабинет |
+| /salon/auth | SalonAuth | Magic link авторизация |
+| /about | ComingSoon | О сервисе |
+| /pass | ComingSoon | Lovi Pass |
+| /partners | Partners | Страница для партнёров (полная) |
+| /PartnerLanding | PartnerLanding | Лендинг для первых 50 салонов |
+| /privacy | ComingSoon | Политика конфиденциальности |
+| /offer | ComingSoon | Публичная оферта |
+| /unsubscribe | Unsubscribe | Отписка от email |
+
+### Ключевые компоненты
+- `Nav.jsx` — sticky навигация, AuthModal, CityModal, UserDropdown. authOpen поднят в App.jsx
+- `Footer.jsx` — тёмный (#1C1F1C), якоря #featured/#slots/#about, партнёрские ссылки
+- `BentoGrid.jsx` — featured слоты, Skeleton loader, id="featured"
+- `AllSlots.jsx` — slots-stream, skeleton, id="slots", фильтр по категориям
+- `PartnerForm.jsx` — форма заявки партнёра, пропы: city, dark, expanded
+- `ComingSoon.jsx` — заглушка страницы
+- `constants.js` — единый справочник CATEGORIES и CAT_LABELS
+
+### Якоря главной страницы
+| id | Секция |
+|----|--------|
+| featured | BentoGrid (Лучшее предложение) |
+| slots | AllSlots (Ближайшие окошки) |
+| about | Hero (Поиск скидок) |
+
+---
+
+## Архитектура Backend
+
+### Ключевые эндпоинты /api/lovi/
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | /featured | BentoGrid — топ слоты, читает published из Supabase |
+| GET | /slots-stream | AllSlots — ближайшие по времени |
+| GET | /slots | Слоты по конкретной услуге и дате |
+| GET | /strategies | Список стратегий салона |
+| PUT | /strategies/{service_id} | Обновить стратегию |
+| POST | /sync-services | Синхронизация услуг из YCLIENTS → Supabase |
+| POST | /book | Бронирование + YooKassa платёж |
+| POST | /city-waitlist | Подписка на открытие в городе |
+| POST | /city-partner | Заявка владельца салона |
+| POST | /connect | Подключение через YCLIENTS маркетплейс |
+| GET | /salon/me | Данные салона + health-check токена |
+| POST | /salon/magic-link | Запрос magic link |
+| GET | /salon/auth | Верификация magic link → JWT |
+| POST | /bookings/{id}/cancel | Отмена брони клиентом |
+
+---
+
+## Supabase — ключевые таблицы
+
+### service_strategies
+Главная таблица управления витриной.
+id, company_id, service_id, service_name, category,
+strategy_name, status (published/draft),
+threshold_far, threshold_near,
+coeff_far, coeff_near, coeff_hot,
+duration_min, display_order, updated_at
+
+**Категории:** head, spa, back, neck, body, face
+**Стратегии:** premium, popular, step, custom
+**Статусы:** published (показывается на витрине), draft (скрыто)
+
+### Логика стратегий скидок
+Универсальная формула:
+hours > threshold_far  → base_price * coeff_far
+hours > threshold_near → base_price * coeff_near
+else                   → base_price * coeff_hot
+
+Пресеты:
+| Стратегия | threshold_far | threshold_near | coeff_hot |
+|-----------|--------------|----------------|-----------|
+| premium   | 48ч          | 24ч            | 0.60      |
+| popular   | 48ч          | 24ч            | 0.65      |
+| step      | 24ч          | 1ч             | 0.60      |
+
+### Другие таблицы
+- `salons` — данные салонов, YCLIENTS токены, token_status
+- `bookings` — брони: status (pending/waiting_payment/confirmed/cancelled_by_client)
+- `users` — клиенты, lovi_balance
+- `balance_transactions` — история баланса
+- `city_waitlist` — подписки на открытие в городе
+- `city_partner_requests` — заявки партнёров
+- `salon_magic_links` — magic link токены
+
+---
+
+## YCLIENTS интеграция
+
+**COMPANY_ID:** 1166484 (Head SPA Beauty, Беляево)
+
+### Whitelist категорий для sync-services
+| category_id YCLIENTS | Наша категория |
+|---------------------|----------------|
+| 27323178 | spa |
+| 19468178 | head |
+| 19658180 | back |
+| 27461844 | spa |
+
+**Исключённые service_id:** 22296048, 22296054, 22296057 (архив)
+
+### Важные нюансы
+- Сервер на UTC, слоты приходят в +03:00 — timezone обрабатывается корректно
+- `seance_length` из YCLIENTS ненадёжен — используем `duration_min` из Supabase
+- gap_minutes=60 — минимальный гэп до слота для показа на витрине
+
+---
+
+## Salon Dashboard (/salon/dashboard)
+
+### Функциональность
+- Список published/draft услуг по категориям
+- Drag-and-drop порядка (display_order)
+- Смена категории через select
+- Toggle published/draft на каждой услуге
+- Кнопка «Обновить из YCLIENTS» → sync-services
+- **StrategyDrawer** — глобальная стратегия (4 шага: приоритет → скидка → горизонт → услуги)
+- **ServiceDrawer** — точечные настройки одной услуги (кнопка «Настроить» на каждой строке)
+
+### Пресеты скидок в drawer
+| id | label | coeff_hot |
+|----|-------|-----------|
+| soft | До 20% | 0.82 |
+| balanced | До 35% | 0.65 |
+| aggressive | До 45% | 0.55 |
+| max | Более 50% | 0.45 |
+
+---
+
+## Известные проблемы и ограничения
+
+1. **Витрина показывает только published услуги** — если нет published, вернёт пустой список
+2. **Дубли услуг** — два «Индийский миофасциальный массаж» (27937128, 27937491), два «Весна: 9 трав» (26522085, 26949774) — нужно дать возможность скрывать
+3. **YooKassa refund** при отмене клиентом не реализован (только баланс Lovi)
+4. **Баланс Lovi** в /my-bookings не отображается
+5. **Бандл 613 КБ** — нужен lazy loading страниц
+
+---
+
+## Беклог (приоритеты)
+
+### P0
+- [ ] YooKassa refund при отмене клиентом
+- [ ] Баланс Lovi в /my-bookings
+
+### P1
+- [ ] Скрытие дублей услуг в dashboard
+- [ ] Кабинет партнёра — статистика броней и выручки
+- [ ] Lazy loading страниц (бандл оптимизация)
+- [ ] Автотесты booking flow
+
+### P2
+- [ ] UI Library страница — полная библиотека компонентов из /ui
+- [ ] Поиск и фильтры в HeroNew — пока не функциональны
+- [ ] Топ по отзывам — рейтинги мастеров из YCLIENTS
+- [ ] Cron email триггеры — reminder за день, review request после визита
+- [ ] Telegram бот — алерты горящих окошек
+- [ ] Geolocation — расстояние до салона
+- [ ] Масштабирование на несколько салонов (убрать хардкод COMPANY_ID)

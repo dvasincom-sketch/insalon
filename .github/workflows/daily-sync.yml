@@ -1,0 +1,17 @@
+name: Daily sync
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # 00:00 UTC = 03:00 МСК
+  workflow_dispatch:      # ручной запуск при необходимости
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync records
+        run: |
+          curl -f "https://insalon.onrender.com/sync/all"
+      - name: Sync transactions
+        run: |
+          curl -f "https://insalon.onrender.com/sync/records?date_from=$(date -d '2 days ago' +%Y-%m-%d)&date_to=$(date +%Y-%m-%d)"

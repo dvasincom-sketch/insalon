@@ -471,6 +471,15 @@
 
         <!-- Таб: Эффективность -->
         <div id="staff-tab-efficiency">
+          <div class="px-3 pt-3 pb-0 d-flex align-items-center gap-2">
+            <label class="text-muted small mb-0">Период:</label>
+            <select class="form-select form-select-sm w-auto" id="efficiency-days" onchange="loadStaff()">
+              <option value="30">30 дней</option>
+              <option value="60">60 дней</option>
+              <option value="90">90 дней</option>
+              <option value="180">180 дней</option>
+            </select>
+          </div>
           <div class="row row-deck row-cards" id="staff-cards">
           <div class="col-12 text-center text-muted py-4">Загрузка...</div>
         </div>

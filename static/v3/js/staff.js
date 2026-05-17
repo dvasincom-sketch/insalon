@@ -1,7 +1,8 @@
 // ============ СОТРУДНИКИ ============
 
 async function loadStaff() {
-  const daily = await fetchData('/analytics/staff/daily?days=30');
+  const days = document.getElementById('efficiency-days')?.value || 30;
+  const daily = await fetchData('/analytics/staff/daily?days=' + days);
   if (!daily || !daily.days) return;
 
   const byStaff = {};

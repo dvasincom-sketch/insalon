@@ -137,6 +137,25 @@ async def sync_records(background_tasks: BackgroundTasks, date_from: str = None,
 
 
 @router.get(
+    "/records-now",
+    summary="Синхронизация записей (синхронная)",
+    description="Загружает записи и ждёт завершения. Не засыпает в отличие от фоновой задачи."
+)
+async def sync_records_now(date_from: str = None, date_to: str = None):
+    salon = await get_salon(COMPANY_ID)
+    if not salon:
+        return {"error": "Салон не найден в базе"}
+    await sync_company_data(
+        company_id=COMPANY_ID,
+        user_token=salon["user_token"],
+        months=12,
+        date_from=date_from,
+        date_to=date_to
+    )
+    return {"status": "done", "message": f"Синхронизация завершена с {date_from} по {date_to}"}
+
+
+@router.get(
     "/recent",
     summary="Ежедневная синхронизация",
     description="Records и транзакции за последние 3 дня. Используется в ночном cron."

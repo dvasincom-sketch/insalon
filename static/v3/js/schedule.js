@@ -161,5 +161,6 @@ function showStaffTab(tab, el) {
   if (tab === 'schedule') loadSchedule();
   if (tab === 'checks') {
     document.getElementById('checks-body').innerHTML = '<p class="text-muted">Выберите месяц для проверки</p>';
+    initChecksFilter();
   }
 }

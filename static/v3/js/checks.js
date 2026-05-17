@@ -1,24 +1,20 @@
 // ============ СТАТУС ПРОВЕРОК ============
 
-function initChecksMonthFilter() {
-  const sel = document.getElementById('checks-filter-month');
-  if (!sel || sel.options.length > 1) return;
-  sel.innerHTML = '<option value="">Все месяцы</option>';
-  const now = new Date();
-  const months = [
-    'Январь','Февраль','Март','Апрель','Май','Июнь',
-    'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'
-  ];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const val = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-    const label = months[d.getMonth()] + ' ' + d.getFullYear();
-    sel.appendChild(new Option(label, val));
-  }
+async function initChecksFilter() {
+  const selC = document.getElementById('checks-filter-month');
+  if (!selC || selC.options.length > 1) return;
+  const pd = await fetchData('/analytics/payroll?months=12');
+  if (!pd?.payroll) return;
+  const MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+  const uniqueMonths = [...new Set(pd.payroll.map(p => p.period_start.slice(0, 7)))].sort().reverse();
+  selC.innerHTML = '<option value="">Выберите месяц</option>';
+  uniqueMonths.forEach(m => {
+    const [y, mo] = m.split('-');
+    selC.appendChild(new Option(MONTHS[parseInt(mo) - 1] + ' ' + y, m));
+  });
 }
 
 async function loadChecks() {
-  initChecksMonthFilter();
   const monthVal = document.getElementById('checks-filter-month')?.value || '';
   if (!monthVal) {
     document.getElementById('checks-body').innerHTML = '<p class="text-muted">Выберите месяц для проверки</p>';

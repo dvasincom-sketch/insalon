@@ -39,6 +39,7 @@ async def sync_company_data(company_id: int, user_token: str, months: int = 12, 
                 page=page
             )
             records = data.get("data", [])
+            print(f"[SYNC] Страница {page}: записей {len(records)}, meta={data.get('meta')}, keys={list(data.keys())}")
             if not records:
                 break
             all_records.extend(records)

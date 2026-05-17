@@ -72,12 +72,7 @@ async function loadChecks() {
           errors.push(`${day}.${String(month).padStart(2, '0')} — ${v.staff_name}: одновременно в смене и под запись`);
         }
       });
-      payrollVisitList.forEach(v => {
-        const inVisitRecords = visitRecords.some(r => r.staff_name === v.staff_name);
-        if (!inVisitRecords) {
-          warnings.push(`${day}.${String(month).padStart(2, '0')} — ${v.staff_name}: выход в payroll, но нет в visit_records`);
-        }
-      });
+      // visit_records — архив, проверка отключена
       if (couplePrograms.length > 0 && shiftNames.length === 1 && visitRecords.length === 0 && payrollVisitList.length === 0) {
         warnings.push(`${day}.${String(month).padStart(2, '0')} — парная программа, но мастер под запись не определён`);
       }
@@ -121,13 +116,7 @@ async function loadChecks() {
         const visitRecordCount = visitInPeriod.length;
         const visitRecordSum   = visitInPeriod.reduce((s, r) => s + (r.visit_pay || 0), 0);
 
-        if (payrollVisitCount !== visitRecordCount && payrollVisitSum === visitRecordSum) {
-          warnings.push(`${p.staff_name} (${p.period_start.slice(0, 7)}): записей в payroll ${payrollVisitCount}, в visit_records ${visitRecordCount} — но суммы совпадают (${payrollVisitSum}₽)`);
-        } else if (payrollVisitCount !== visitRecordCount && payrollVisitSum !== visitRecordSum) {
-          errors.push(`${p.staff_name} (${p.period_start.slice(0, 7)}): записей в payroll ${payrollVisitCount}, в visit_records ${visitRecordCount}; сумма в payroll ${payrollVisitSum}₽, в visit_records ${visitRecordSum}₽`);
-        } else if (payrollVisitCount === visitRecordCount && payrollVisitSum !== visitRecordSum) {
-          errors.push(`${p.staff_name} (${p.period_start.slice(0, 7)}): количество совпадает (${payrollVisitCount}), но сумма в payroll ${payrollVisitSum}₽, в visit_records ${visitRecordSum}₽`);
-        }
+        // Сравнение с visit_records отключено (архив)
       } else if (p.visit_pay > 0) {
         warnings.push(`${p.staff_name} (${p.period_start.slice(0, 7)}): visit_pay=${p.visit_pay}₽, но в примечаниях нет выходов`);
       }
@@ -138,10 +127,8 @@ async function loadChecks() {
       'Мастер в расписании (shifts) совпадает с payroll notes',
       'Мастер в payroll notes совпадает с расписанием (shifts)',
       'Мастер не числится одновременно в смене и под запись',
-      'Выход под запись из payroll есть в visit_records',
       'Парные программы — мастер под запись определён',
-      'Количество смен в payroll совпадает с днями смен в примечаниях',
-      'Дни выходов в payroll совпадают с visit_records по количеству и сумме'
+      'Количество смен в payroll совпадает с днями смен в примечаниях'
     ];
 
     const body = document.getElementById('checks-body');

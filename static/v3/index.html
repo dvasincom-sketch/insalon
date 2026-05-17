@@ -481,10 +481,16 @@
         <!-- Таб: Расписание -->
         <div id="staff-tab-schedule" class="d-none">
           <div class="card mb-3">
-            <div class="card-body d-flex align-items-center gap-3">
-              <button class="btn btn-outline-secondary btn-sm" onclick="changeScheduleMonth(-1)">← Пред.</button>
-              <h4 class="mb-0" id="schedule-month-title">—</h4>
-              <button class="btn btn-outline-secondary btn-sm" onclick="changeScheduleMonth(1)">След. →</button>
+            <div class="card-body d-flex align-items-center justify-content-between">
+              <div class="d-flex align-items-center gap-3">
+                <button class="btn btn-outline-secondary btn-sm" onclick="changeScheduleMonth(-1)">← Пред.</button>
+                <h4 class="mb-0" id="schedule-month-title">—</h4>
+                <button class="btn btn-outline-secondary btn-sm" onclick="changeScheduleMonth(1)">След. →</button>
+              </div>
+              <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-danger" onclick="clearMonth()">🗑 Очистить месяц</button>
+                <button class="btn btn-sm btn-outline-primary" onclick="openFillMonthModal()">📅 Заполнить месяц</button>
+              </div>
             </div>
           </div>
           <div class="card">
@@ -503,6 +509,57 @@
             </div>
           </div>
         </div><!-- /staff-tab-schedule -->
+
+<!-- Модалка заполнения месяца по паттерну -->
+<div id="fillMonthModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:1060;background:rgba(0,0,0,0.45)">
+  <div style="background:#fff;border-radius:12px;max-width:480px;margin:80px auto;padding:24px;">
+    <h5 class="mb-3">📅 Заполнить месяц по паттерну</h5>
+    <div class="mb-3">
+      <label class="form-label small text-muted">Мастер</label>
+      <select class="form-select" id="fill-staff-select"></select>
+    </div>
+    <div class="mb-3">
+      <label class="form-label small text-muted">Дни недели</label>
+      <div class="d-flex gap-2 flex-wrap" id="fill-weekdays">
+        <label class="badge bg-secondary-lt" style="cursor:pointer;font-size:13px"><input type="checkbox" value="0" class="me-1">Пн</label>
+        <label class="badge bg-secondary-lt" style="cursor:pointer;font-size:13px"><input type="checkbox" value="1" class="me-1">Вт</label>
+        <label class="badge bg-secondary-lt" style="cursor:pointer;font-size:13px"><input type="checkbox" value="2" class="me-1">Ср</label>
+        <label class="badge bg-secondary-lt" style="cursor:pointer;font-size:13px"><input type="checkbox" value="3" class="me-1">Чт</label>
+        <label class="badge bg-secondary-lt" style="cursor:pointer;font-size:13px"><input type="checkbox" value="4" class="me-1">Пт</label>
+        <label class="badge bg-secondary-lt" style="cursor:pointer;font-size:13px"><input type="checkbox" value="5" class="me-1">Сб</label>
+        <label class="badge bg-secondary-lt" style="cursor:pointer;font-size:13px"><input type="checkbox" value="6" class="me-1">Вс</label>
+      </div>
+    </div>
+    <div class="mb-3">
+      <label class="form-label small text-muted">Тип</label>
+      <select class="form-select" id="fill-shift-type">
+        <option value="shift">Смена (5 000 ₽)</option>
+        <option value="visit">Выход под запись</option>
+      </select>
+    </div>
+    <div class="d-flex gap-2 justify-content-end mt-3">
+      <button class="btn btn-secondary" onclick="closeFillMonthModal()">Отмена</button>
+      <button class="btn btn-primary" onclick="executeFillMonth()">Заполнить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Модалка расписания -->
+<div class="modal fade" id="scheduleModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="scheduleModalTitle">—</h5>
+        <button type="button" class="btn-close" onclick="closeScheduleModal()"></button>
+      </div>
+      <div class="modal-body" id="scheduleModalBody">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeScheduleModal()">Закрыть</button>
+      </div>
+    </div>
+  </div>
+</div>
 
         <!-- Таб: Оплата труда -->
         <div id="staff-tab-payroll" class="d-none">

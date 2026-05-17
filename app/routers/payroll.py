@@ -126,6 +126,54 @@ async def get_advances(year: int, month: int, day: int):
     
     return {"advances": result, "period_start": period_start, "period_end": period_end}
 
+class ShiftAdd(BaseModel):
+    date: str
+    staff_name: str
+    shift_pay: int = 5000
+    is_visit_only: bool = False
+    is_double_shift: bool = False
+
+@router.post("/shifts/add")
+async def add_shift(data: ShiftAdd):
+    """Добавить смену или выход под запись в расписание"""
+    # Проверяем дубль
+    existing = supabase.table("shifts").select("id").eq(
+        "company_id", COMPANY_ID
+    ).eq("date", data.date).eq("staff_name", data.staff_name).execute()
+    if existing.data:
+        record_id = existing.data[0]["id"]
+        # Обновляем shift_pay если передан
+        if data.shift_pay > 0:
+            supabase.table("shifts").update({"shift_pay": data.shift_pay}).eq("id", record_id).execute()
+        return {"status": "exists", "id": record_id}
+
+    result = supabase.table("shifts").insert({
+        "company_id": COMPANY_ID,
+        "date": data.date,
+        "staff_name": data.staff_name,
+        "shift_pay": data.shift_pay,
+        "is_visit_only": data.is_visit_only,
+        "is_double_shift": data.is_double_shift
+    }).execute()
+    return {"status": "created", "id": result.data[0]["id"]}
+
+@router.delete("/shifts/{shift_id}")
+async def delete_shift(shift_id: int):
+    """Удалить смену из расписания"""
+    supabase.table("shifts").delete().eq("id", shift_id).eq(
+        "company_id", COMPANY_ID
+    ).execute()
+    return {"status": "deleted", "id": shift_id}
+
+@router.get("/staff/list")
+async def get_staff_list():
+    """Список активных сотрудников"""
+    result = supabase.table("staff").select("name").eq(
+        "company_id", COMPANY_ID
+    ).execute()
+    names = sorted(list(set([r["name"] for r in result.data if r.get("name")])))
+    return {"staff": names}
+
 @router.post("/upsert")
 async def upsert_payroll(data: PayrollUpsert):
     # Проверяем есть ли уже запись за этот период

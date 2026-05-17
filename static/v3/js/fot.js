@@ -39,6 +39,16 @@ async function loadFotData(overridePeriod) {
     fetchData('/payroll/unclosed')
   ]);
 
+  // Долги сотрудников: только из текущего месяца (первая половина → вторая)
+  const staffDebts = {};
+  const currentMonthStr = String(year) + '-' + String(month).padStart(2, '0');
+  (periodData?.records || []).forEach(p => {
+    if (p.balance < 0 && p.period_start.startsWith(currentMonthStr)) {
+      if (!staffDebts[p.staff_name]) staffDebts[p.staff_name] = 0;
+      staffDebts[p.staff_name] += Math.abs(p.balance);
+    }
+  });
+
   // Рендер табов периодов
   const tabsContainer = document.getElementById('fot-period-tabs');
   if (tabsContainer) {
@@ -89,6 +99,22 @@ async function loadFotData(overridePeriod) {
   // Выходы под запись в периоде
   const visitPayByStaff    = {};
   const visitDetailByStaff = {};
+
+  // Добавляем выходы под запись из shifts (основной источник)
+  (shiftsData?.visits || []).forEach(s => {
+    const dayNum = parseInt(s.date.split('-')[2]);
+    const ps = new Date(periodStart + 'T00:00:00');
+    const pe = new Date(periodEnd   + 'T23:59:59');
+    const d  = new Date(s.date + 'T00:00:00');
+    if (d < ps || d > pe) return;
+    if (!visitPayByStaff[s.staff_name]) { visitPayByStaff[s.staff_name] = 0; visitDetailByStaff[s.staff_name] = []; }
+    visitPayByStaff[s.staff_name] += s.shift_pay || 0;
+    visitDetailByStaff[s.staff_name].push(
+      `${String(dayNum).padStart(2, '0')}.${String(month).padStart(2, '0')}=${s.shift_pay}₽`
+    );
+  });
+
+  // Также visit_records (архив) — добавляем только если нет в shifts
   Object.entries(visitsData?.visit_days || {}).forEach(([dayNum, recs]) => {
     const d  = new Date(year, month - 1, parseInt(dayNum));
     const ps = new Date(periodStart + 'T00:00:00');
@@ -119,6 +145,7 @@ async function loadFotData(overridePeriod) {
       visitPay:    visitPayByStaff[name] || 0,
       visitDetail: visitDetailByStaff[name] || [],
       debts:       debtByStaff[name] || [],
+      staffDebt:   staffDebts[name] || 0,
       advances:    [{ date: '', amount: '' }],
       bonuses:     [],
       isPaid:      !!paidStaff[name],
@@ -256,6 +283,7 @@ function renderFotRows() {
               <div class="d-flex justify-content-between mb-1 small"><span class="text-muted">Смены</span><span>${d.shiftPay.toLocaleString('ru-RU')} ₽</span></div>
               ${d.visitPay > 0 ? `<div class="d-flex justify-content-between mb-1 small"><span class="text-muted">Выходы</span><span>${d.visitPay.toLocaleString('ru-RU')} ₽</span></div>` : ''}
               <div class="d-flex justify-content-between mb-1 small"><span class="text-muted">Бонусы</span><span id="fot-bonus-sum-${name}">0 ₽</span></div>
+              ${d.staffDebt > 0 ? `<div class="d-flex justify-content-between mb-1 small"><span class="text-muted text-danger">Долг (пред. период)</span><span class="text-danger">−${d.staffDebt.toLocaleString('ru-RU')} ₽</span></div>` : ''}
               <div class="d-flex justify-content-between mb-1 small"><span class="text-muted">Авансы выданы</span><span class="text-orange" id="fot-adv-sum-${name}">0 ₽</span></div>
               <div class="border-top pt-2 mt-2 d-flex justify-content-between align-items-center">
                 <span class="fw-bold">К выплате</span>
@@ -378,7 +406,7 @@ function recalcFot(name) {
   let   totalBonus = 0;
   d.bonuses.forEach(b => { totalBonus += parseFloat(b.amount) || 0; });
   const totalDebt = d.debts.reduce((s, x) => s + x.balance, 0);
-  const toPay     = d.shiftPay + d.visitPay + totalBonus + totalDebt - totalAdv;
+  const toPay     = d.shiftPay + d.visitPay + totalBonus + totalDebt - totalAdv - (d.staffDebt || 0);
 
   const advEl   = document.getElementById(`fot-adv-sum-${name}`);
   const bonusEl = document.getElementById(`fot-bonus-sum-${name}`);

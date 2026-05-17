@@ -13,10 +13,13 @@ router = APIRouter(prefix="/sync", tags=["Синхронизация"])
 COMPANY_ID = int(os.getenv("YCLIENTS_COMPANY_ID"))
 
 
-async def sync_company_data(company_id: int, user_token: str, months: int = 12):
+async def sync_company_data(company_id: int, user_token: str, months: int = 12, date_from: str = None, date_to: str = None):
     """Фоновая задача — загружает записи за N месяцев (months=0 — последние 3 дня)"""
-    end_date = datetime.now().strftime("%Y-%m-%d")
-    if months == 0:
+    end_date = date_to or datetime.now().strftime("%Y-%m-%d")
+    if date_from:
+        start_date = date_from
+        print(f"[SYNC] Синхронизация филиала {company_id} с {date_from} по {end_date}")
+    elif months == 0:
         start_date = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
         print(f"[SYNC] Начинаем синхронизацию филиала {company_id} за последние 3 дня")
     else:
@@ -116,9 +119,9 @@ async def sync_transactions_data(company_id: int, user_token: str):
 @router.get(
     "/records",
     summary="Синхронизация записей",
-    description="Загружает все записи клиентов из YCLIENTS за 12 месяцев и сохраняет в Supabase. Запускается в фоне."
+    description="Загружает записи клиентов из YCLIENTS. По умолчанию за 12 месяцев, можно указать date_from и date_to."
 )
-async def sync_records(background_tasks: BackgroundTasks):
+async def sync_records(background_tasks: BackgroundTasks, date_from: str = None, date_to: str = None):
     salon = await get_salon(COMPANY_ID)
     if not salon:
         return {"error": "Салон не найден в базе"}
@@ -126,7 +129,9 @@ async def sync_records(background_tasks: BackgroundTasks):
         sync_company_data,
         company_id=COMPANY_ID,
         user_token=salon["user_token"],
-        months=12
+        months=12,
+        date_from=date_from,
+        date_to=date_to
     )
     return {"status": "started", "message": "Синхронизация записей запущена в фоне"}
 

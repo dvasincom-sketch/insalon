@@ -833,7 +833,11 @@ async def get_couple_programs(year: int, month: int):
     for r in result.data:
         price_min = price_map.get(r["service_title"], 0)
         service_cost = r.get("service_cost") or 0
-        if price_min > 0 and service_cost < price_min * 0.5:
+        from datetime import date as dt
+        record_date = r["date"][:10]
+        is_future = record_date >= dt.today().strftime("%Y-%m-%d")
+        # Пропускаем только прошедшие записи с низкой стоимостью (абонементы)
+        if not is_future and price_min > 0 and service_cost < price_min * 0.5:
             continue
         day = int(r["date"].split("-")[2][:2])
         if day not in by_day:

@@ -14,10 +14,14 @@ COMPANY_ID = int(os.getenv("YCLIENTS_COMPANY_ID"))
 
 
 async def sync_company_data(company_id: int, user_token: str, months: int = 12):
-    """Фоновая задача — загружает записи за N месяцев"""
-    print(f"[SYNC] Начинаем синхронизацию филиала {company_id} за {months} месяцев")
+    """Фоновая задача — загружает записи за N месяцев (months=0 — последние 3 дня)"""
     end_date = datetime.now().strftime("%Y-%m-%d")
-    start_date = (datetime.now() - timedelta(days=30 * months)).strftime("%Y-%m-%d")
+    if months == 0:
+        start_date = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
+        print(f"[SYNC] Начинаем синхронизацию филиала {company_id} за последние 3 дня")
+    else:
+        start_date = (datetime.now() - timedelta(days=30 * months)).strftime("%Y-%m-%d")
+        print(f"[SYNC] Начинаем синхронизацию филиала {company_id} за {months} месяцев")
 
     try:
         all_records = []
@@ -125,6 +129,21 @@ async def sync_records(background_tasks: BackgroundTasks):
         months=12
     )
     return {"status": "started", "message": "Синхронизация записей запущена в фоне"}
+
+
+@router.get(
+    "/recent",
+    summary="Ежедневная синхронизация",
+    description="Records и транзакции за последние 3 дня. Используется в ночном cron."
+)
+async def sync_recent(background_tasks: BackgroundTasks):
+    salon = await get_salon(COMPANY_ID)
+    if not salon:
+        return {"error": "Салон не найден"}
+    token = salon["user_token"]
+    background_tasks.add_task(sync_company_data, COMPANY_ID, token, 0)
+    background_tasks.add_task(sync_transactions_data, COMPANY_ID, token)
+    return {"status": "started", "message": "Ежедневная синхронизация запущена"}
 
 
 @router.get(

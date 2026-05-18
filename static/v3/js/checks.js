@@ -1,5 +1,57 @@
 // ============ СТАТУС ПРОВЕРОК ============
 
+async function loadSyncStatus() {
+  const bar = document.getElementById('sync-status-bar');
+  if (!bar) return;
+  try {
+    const data = await fetchData('/sync/status');
+    if (!data) { bar.innerHTML = '<div class="text-muted small">Статус недоступен</div>'; return; }
+
+    const fmt = (iso) => {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      return d.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    };
+
+    const recSync  = fmt(data.last_records_sync);
+    const recDate  = data.last_records_date ? data.last_records_date.slice(0, 10) : '—';
+    const trSync   = fmt(data.last_transactions_sync);
+    const trDate   = data.last_transactions_date ? data.last_transactions_date.slice(0, 10) : '—';
+
+    // Проверяем свежесть — если последняя синхронизация > 25 часов назад
+    const lastSyncTime = new Date(data.last_records_sync || 0);
+    const hoursSince   = (Date.now() - lastSyncTime) / 3600000;
+    const statusColor  = hoursSince < 25 ? 'text-green' : 'text-red';
+    const statusIcon   = hoursSince < 25 ? '✅' : '⚠️';
+    const statusText   = hoursSince < 25 ? 'Синхронизация актуальна' : 'Синхронизация устарела';
+
+    bar.innerHTML = `
+      <div class="d-flex align-items-center gap-4 flex-wrap">
+        <div>
+          <span class="${statusColor} fw-bold">${statusIcon} ${statusText}</span>
+        </div>
+        <div class="text-muted small">
+          📋 Записи: <strong>${recSync}</strong>
+          <span class="text-muted">(последняя запись ${recDate})</span>
+        </div>
+        <div class="text-muted small">
+          💰 Транзакции: <strong>${trSync}</strong>
+          <span class="text-muted">(последняя ${trDate})</span>
+        </div>
+        <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="manualSync()">🔄 Синхронизировать</button>
+      </div>`;
+  } catch(e) {
+    bar.innerHTML = '<div class="text-muted small">Ошибка загрузки статуса</div>';
+  }
+}
+
+async function manualSync() {
+  const bar = document.getElementById('sync-status-bar');
+  bar.innerHTML = '<div class="text-muted small">⏳ Синхронизация запущена...</div>';
+  await fetchData('/sync/recent');
+  setTimeout(() => loadSyncStatus(), 5000);
+}
+
 async function initChecksFilter() {
   const selC = document.getElementById('checks-filter-month');
   if (!selC || selC.options.length > 1) return;

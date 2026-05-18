@@ -157,6 +157,34 @@ async def sync_records_now(date_from: str = None, date_to: str = None):
 
 
 @router.get(
+    "/status",
+    summary="Статус последней синхронизации"
+)
+async def sync_status():
+    from app.database import supabase as _supabase
+    # Последняя запись в records
+    last_record = _supabase.table("records").select(
+        "synced_at, date"
+    ).eq("company_id", COMPANY_ID).order(
+        "synced_at", desc=True
+    ).limit(1).execute()
+
+    # Последняя транзакция
+    last_transaction = _supabase.table("transactions").select(
+        "created_at, date"
+    ).eq("company_id", COMPANY_ID).order(
+        "created_at", desc=True
+    ).limit(1).execute()
+
+    return {
+        "last_records_sync": last_record.data[0]["synced_at"] if last_record.data else None,
+        "last_records_date": last_record.data[0]["date"] if last_record.data else None,
+        "last_transactions_sync": last_transaction.data[0]["created_at"] if last_transaction.data else None,
+        "last_transactions_date": last_transaction.data[0]["date"] if last_transaction.data else None,
+    }
+
+
+@router.get(
     "/recent",
     summary="Ежедневная синхронизация",
     description="Records и транзакции за последние 3 дня. Используется в ночном cron."

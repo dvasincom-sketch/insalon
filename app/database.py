@@ -46,6 +46,7 @@ async def save_records(records: list, company_id: int):
         service_cost = int(float(service[0].get("cost", 0))) if service else 0
         client = r.get("client") or {}
 
+        from datetime import datetime
         rows.append({
             "id": r["id"],
             "company_id": company_id,
@@ -59,7 +60,8 @@ async def save_records(records: list, company_id: int):
             "attendance": r.get("attendance", 0),
             "online": r.get("online", False),
             "record_from": r.get("record_from", ""),
-            "duration": int(r.get("seance_length", 0))
+            "duration": int(r.get("seance_length", 0)),
+            "synced_at": datetime.now().isoformat()
         })
 
     result = supabase.table("records").upsert(rows, on_conflict="id").execute()

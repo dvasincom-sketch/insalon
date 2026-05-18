@@ -60,3 +60,5 @@ python-jose[cryptography]
 bcrypt
 pydantic[email]
 resend
+
+python-multipart>=0.0.9

@@ -37,7 +37,7 @@ class UTF8JSONResponse(JSONResponse):
 
 app.router.default_response_class = UTF8JSONResponse
 
-from app.routers import sync, analytics, oauth, webhooks, checks, payroll, booking, payments, dev_sessions, lovi, auth
+from app.routers import sync, analytics, oauth, webhooks, checks, payroll, booking, payments, dev_sessions, lovi, auth, obligations
 app.include_router(sync.router)
 app.include_router(analytics.router)
 app.include_router(oauth.router)
@@ -49,6 +49,7 @@ app.include_router(payments.router)
 app.include_router(dev_sessions.router)
 app.include_router(lovi.router)
 app.include_router(auth.router)
+app.include_router(obligations.router)
 
 # Статические файлы дашборда
 if os.path.exists("static"):

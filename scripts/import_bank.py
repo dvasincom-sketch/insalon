@@ -53,7 +53,16 @@ def import_csv(filepath: str):
                 "inn": inn
             })
 
-    print(f"Всего строк в файле: {len(rows)}")
+    # Дедупликация перед отправкой
+    seen = set()
+    deduped = []
+    for r in rows:
+        key = (r['company_id'], r['date'], r['amount'], r['description'], r['counterparty'])
+        if key not in seen:
+            seen.add(key)
+            deduped.append(r)
+    rows = deduped
+    print(f"Всего строк в файле: {len(rows)} (после дедупликации)")
     batch_size = 100
     saved = 0
     skipped = 0

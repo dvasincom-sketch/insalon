@@ -127,12 +127,12 @@ function renderPLTable(months) {
         <td class="text-end" style="color:#2f9e44">${formatK(m.revenue_abonements)}</td>
         <td class="text-end" style="color:#2f9e44">${formatK(m.revenue_fitmost)}</td>
         <td class="text-end fw-bold" style="background:#d3f9d8;color:#1e7e34">${formatK(m.total_revenue)}</td>
-        <td class="text-end" style="color:#c92a2a">${formatK(m.salary)}</td>
-        <td class="text-end" style="color:#c92a2a">${formatK(m.rent)}</td>
-        <td class="text-end" style="color:#c92a2a">${formatK(m.cosmetics)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','salary','ФОТ')" title="Детализация">${formatK(m.salary)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','salon_rent','Аренда')" title="Детализация">${formatK(m.rent)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','cosmetics','Косметика')" title="Детализация">${formatK(m.cosmetics)}</td>
         <td class="text-end" style="color:#c92a2a">${formatK(m.materials)}</td>
-        <td class="text-end" style="color:#c92a2a">${formatK(m.marketing)}</td>
-        <td class="text-end" style="color:#c92a2a">${formatK(m.bank_fees)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','marketing','Маркетинг')" title="Детализация">${formatK(m.marketing)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','bank_fees','Банк')" title="Детализация">${formatK(m.bank_fees)}</td>
         <td class="text-end fw-bold" style="background:#ffe0e0;color:#c92a2a">${formatK(m.total_expenses)}</td>
         <td class="text-end ${profitClass}" style="${profitBg}">${profit >= 0 ? '+' : ''}${formatK(profit)}</td>
       </tr>`;
@@ -143,15 +143,68 @@ function renderPLTable(months) {
         <td><span class="fw-bold">${m.month}</span></td>
         <td class="text-end" style="color:#2f9e44" colspan="4">${formatK(m.revenue_other || m.total_revenue)}</td>
         <td class="text-end fw-bold" style="background:#d3f9d8;color:#1e7e34">${formatK(m.total_revenue)}</td>
-        <td class="text-end" style="color:#c92a2a">${formatK(m.salary)}</td>
-        <td class="text-end" style="color:#c92a2a">${formatK(m.rent)}</td>
-        <td class="text-end" style="color:#c92a2a">${formatK(m.cosmetics)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','salary','ФОТ')" title="Детализация">${formatK(m.salary)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','salon_rent','Аренда')" title="Детализация">${formatK(m.rent)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','cosmetics','Косметика')" title="Детализация">${formatK(m.cosmetics)}</td>
         <td class="text-end" style="color:#c92a2a">${formatK(m.materials)}</td>
-        <td class="text-end" style="color:#c92a2a">${formatK(m.marketing)}</td>
-        <td class="text-end" style="color:#c92a2a">${formatK(m.bank_fees)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','marketing','Маркетинг')" title="Детализация">${formatK(m.marketing)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','bank_fees','Банк')" title="Детализация">${formatK(m.bank_fees)}</td>
         <td class="text-end fw-bold" style="background:#ffe0e0;color:#c92a2a">${formatK(m.total_expenses)}</td>
         <td class="text-end ${profitClass}" style="${profitBg}">${profit >= 0 ? '+' : ''}${formatK(profit)}</td>
       </tr>`;
     }
   }).join('');
+}
+
+
+// ── P&L Drill-down ──────────────────────────────────────────
+async function showPLDetail(month, category, label) {
+  const modalEl = document.getElementById('pl-detail-modal');
+  if (!modalEl) return;
+
+  document.getElementById('pl-detail-title').textContent = `${label} — ${month}`;
+  document.getElementById('pl-detail-body').innerHTML = '<div class="text-center text-muted py-3">Загрузка...</div>';
+
+  modalEl.style.display = 'flex';
+
+  const data = await fetchData(`/analytics/pl-detail?month=${month}&category=${category}`);
+  if (!data || data.error) {
+    document.getElementById('pl-detail-body').innerHTML = '<div class="text-danger py-3">Ошибка загрузки</div>';
+    return;
+  }
+
+  const rows = (data.rows || []).map(r => `
+    <tr>
+      <td class="small">${r.date || ''}</td>
+      <td class="small">${r.label}</td>
+      <td class="text-muted small">${r.detail || ''}</td>
+      <td class="text-end fw-bold">${formatMoney(r.amount)}</td>
+      ${r.status ? `<td><span class="badge ${r.status === 'paid' ? 'bg-green-lt' : 'bg-yellow-lt'}">${r.status}</span></td>` : '<td></td>'}
+    </tr>`).join('');
+
+  document.getElementById('pl-detail-body').innerHTML = `
+    <table class="table table-vcenter table-sm">
+      <thead>
+        <tr>
+          <th style="width:90px">Дата</th>
+          <th>Описание</th>
+          <th>Детали</th>
+          <th class="text-end">Сумма</th>
+          <th style="width:80px">Статус</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+      <tfoot>
+        <tr class="fw-bold">
+          <td colspan="3" class="text-end">Итого:</td>
+          <td class="text-end">${formatMoney(data.total)}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>`;
+}
+
+function closePLDetail() {
+  const el = document.getElementById('pl-detail-modal');
+  if (el) el.style.display = 'none';
 }

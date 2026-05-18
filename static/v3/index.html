@@ -947,5 +947,16 @@
   </div>
 </div>
 
+<!-- P&L Drill-down модалка -->
+<div id="pl-detail-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;max-width:700px;width:95%;max-height:80vh;overflow-y:auto;padding:24px">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="mb-0" id="pl-detail-title">Детализация</h5>
+      <button class="btn btn-sm btn-outline-secondary" onclick="closePLDetail()">✕</button>
+    </div>
+    <div id="pl-detail-body"></div>
+  </div>
+</div>
+
 </body>
 </html>

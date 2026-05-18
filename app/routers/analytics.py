@@ -929,3 +929,105 @@ async def get_payroll_schedule(year: int, month: int):
         "visits_from_payroll": visits_by_day
     }
 
+
+
+@router.get("/pl-detail")
+async def pl_detail(month: str, category: str):
+    """Детализация P&L по месяцу и категории"""
+    try:
+        from app.database import supabase
+        date_from = month + "-01"
+        import calendar
+        y, m = map(int, month.split("-"))
+        last_day = calendar.monthrange(y, m)[1]
+        date_to = f"{month}-{last_day}"
+
+        if category == "salary":
+            # ФОТ из payroll
+            result = supabase.table("payroll").select(
+                "staff_name, period_start, period_end, shifts, shift_pay, visit_pay, bonus_loyalty, total_accrued, status"
+            ).eq("company_id", COMPANY_ID).gte(
+                "period_start", date_from
+            ).lte("period_start", date_to).order("staff_name").execute()
+            rows = [{"label": f"{p['staff_name']} ({p['period_start'][:7]} {p['period_start'][8:10]}–{p['period_end'][8:10]})",
+                     "detail": f"{p['shifts']} смен × 5000 + выходы {p['visit_pay']} + бонусы {p['bonus_loyalty']}",
+                     "amount": float(p["total_accrued"] or 0),
+                     "status": p["status"]} for p in result.data]
+            return {"category": "ФОТ", "month": month, "rows": rows,
+                    "total": sum(r["amount"] for r in rows)}
+
+        elif category in ("salon_rent", "rent", "marketing"):
+            result = supabase.table("bank_transactions").select(
+                "date, amount, description, counterparty, period, category"
+            ).eq("company_id", COMPANY_ID).eq(
+                "category", "salon_rent" if category in ("rent", "salon_rent") else "marketing"
+            ).or_(f"date.gte.{date_from},period.gte.{date_from}").or_(
+                f"date.lte.{date_to},period.lte.{date_to}"
+            ).execute()
+            # Фильтруем по периоду
+            rows = []
+            for t in result.data:
+                period = (t.get("period") or t["date"])[:7]
+                if period == month:
+                    rows.append({
+                        "label": t["counterparty"] or t["description"][:50],
+                        "detail": t["description"][:100],
+                        "amount": abs(float(t["amount"] or 0)),
+                        "date": t["date"]
+                    })
+            return {"category": category, "month": month, "rows": rows,
+                    "total": sum(r["amount"] for r in rows)}
+
+        elif category == "cosmetics":
+            result = supabase.table("bank_transactions").select(
+                "date, amount, description, counterparty"
+            ).eq("company_id", COMPANY_ID).eq(
+                "category", "cosmetics"
+            ).gte("date", date_from).lte("date", date_to).execute()
+            rows = [{"label": t["counterparty"] or "", "detail": t["description"][:100],
+                     "amount": abs(float(t["amount"] or 0)), "date": t["date"]} for t in result.data]
+            return {"category": "Косметика", "month": month, "rows": rows,
+                    "total": sum(r["amount"] for r in rows)}
+
+        elif category == "bank_fees":
+            result = supabase.table("bank_transactions").select(
+                "date, amount, description"
+            ).eq("company_id", COMPANY_ID).eq(
+                "category", "bank_fee"
+            ).gte("date", date_from).lte("date", date_to).execute()
+            rows = [{"label": t["description"][:60], "detail": "",
+                     "amount": abs(float(t["amount"] or 0)), "date": t["date"]} for t in result.data]
+            return {"category": "Банк", "month": month, "rows": rows,
+                    "total": sum(r["amount"] for r in rows)}
+
+        elif category in ("revenue_services", "revenue_certificates", "revenue_abonements", "revenue_fitmost"):
+            type_filter = {
+                "revenue_services": "услуг",
+                "revenue_certificates": "сертификат",
+                "revenue_abonements": "абонемент"
+            }
+            if category == "revenue_fitmost":
+                result = supabase.table("bank_transactions").select(
+                    "date, amount, counterparty, period"
+                ).eq("company_id", COMPANY_ID).eq("type", "Кредит").ilike(
+                    "counterparty", "%фитмост%"
+                ).gte("date", date_from).lte("date", date_to).execute()
+                rows = [{"label": "Fitmost", "detail": t["counterparty"],
+                         "amount": float(t["amount"] or 0), "date": t["date"]} for t in result.data]
+            else:
+                keyword = type_filter.get(category, "")
+                result = supabase.table("transactions").select(
+                    "date, amount, type_title, client_name"
+                ).eq("company_id", COMPANY_ID).gt("amount", 0).ilike(
+                    "type_title", f"%{keyword}%"
+                ).gte("date", date_from).lte("date", date_to).order("date", desc=True).execute()
+                rows = [{"label": t["type_title"] or "", "detail": t.get("client_name") or "",
+                         "amount": float(t["amount"] or 0), "date": t["date"][:10]} for t in result.data]
+            return {"category": category, "month": month, "rows": rows,
+                    "total": sum(r["amount"] for r in rows)}
+
+        return {"category": category, "month": month, "rows": [], "total": 0}
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "trace": traceback.format_exc()}

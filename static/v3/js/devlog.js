@@ -247,25 +247,43 @@ async function dlLoadSessions() {
       </div>`;
       return;
     }
-    const rows = data.map(s => `
-      <tr>
-        <td class="text-muted text-nowrap small">${s.date}</td>
-        <td>${dlEsc(s.feature)}</td>
-        <td>${dlBadge(s.category)}</td>
-        <td class="text-end">${dlFmt(s.duration_min/60)} ч</td>
-        <td class="text-end">${dlFmtK(s.tokens_approx)}</td>
-        <td class="text-center" style="width:36px">${s.notes?`<span title="${dlEsc(s.notes)}" style="cursor:help">📝</span>`:''}</td>
-      </tr>`).join('');
-    wrap.innerHTML = `
-      <div class="table-responsive">
-        <table class="table table-vcenter table-hover card-table">
-          <thead><tr>
-            <th>Дата</th><th>Задача</th><th>Категория</th>
-            <th class="text-end">Часы</th><th class="text-end">Токены</th><th></th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>`;
+    const isMobile = window.innerWidth < 768;
+    if (isMobile) {
+      const cards = data.map(s => `
+        <div class="px-3 py-2 border-bottom">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="text-muted small">${s.date}</span>
+            ${dlBadge(s.category)}
+          </div>
+          <div class="fw-semibold small mb-1">${dlEsc(s.feature)}</div>
+          <div class="d-flex gap-3 text-muted small">
+            <span>⏱ ${dlFmt(s.duration_min/60)} ч</span>
+            <span>🪙 ${dlFmtK(s.tokens_approx)}</span>
+            ${s.notes ? `<span title="${dlEsc(s.notes)}">📝</span>` : ''}
+          </div>
+        </div>`).join('');
+      wrap.innerHTML = `<div>${cards}</div>`;
+    } else {
+      const rows = data.map(s => `
+        <tr>
+          <td class="text-muted text-nowrap small">${s.date}</td>
+          <td>${dlEsc(s.feature)}</td>
+          <td>${dlBadge(s.category)}</td>
+          <td class="text-end">${dlFmt(s.duration_min/60)} ч</td>
+          <td class="text-end">${dlFmtK(s.tokens_approx)}</td>
+          <td class="text-center" style="width:36px">${s.notes?`<span title="${dlEsc(s.notes)}" style="cursor:help">📝</span>`:''}</td>
+        </tr>`).join('');
+      wrap.innerHTML = `
+        <div class="table-responsive">
+          <table class="table table-vcenter table-hover card-table">
+            <thead><tr>
+              <th>Дата</th><th>Задача</th><th>Категория</th>
+              <th class="text-end">Часы</th><th class="text-end">Токены</th><th></th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
   } catch(e) {
     wrap.innerHTML = `<div class="text-center text-muted py-5">
       <div style="font-size:2rem" class="mb-2">📋</div>
@@ -282,7 +300,12 @@ function dlOpenModal() {
   document.getElementById('dl-f-duration').value = '60';
   document.getElementById('dl-f-notes').value    = '';
   document.getElementById('dl-form-err').classList.add('d-none');
-  new bootstrap.Modal(document.getElementById('dl-modal')).show();
+  const modalEl = document.getElementById('dl-modal');
+  modalEl.classList.add('show');
+  modalEl.style.display = 'block';
+  document.body.classList.add('modal-open');
+  let bd = document.getElementById('dl-backdrop');
+  if (!bd) { bd = document.createElement('div'); bd.id='dl-backdrop'; bd.className='modal-backdrop fade show'; document.body.appendChild(bd); }
 }
 
 async function dlSaveSession() {
@@ -309,7 +332,11 @@ async function dlSaveSession() {
       body: JSON.stringify(payload),
     });
     if (!res.ok) { const e = await res.json(); throw new Error(e.detail || res.statusText); }
-    bootstrap.Modal.getInstance(document.getElementById('dl-modal')).hide();
+    const m = document.getElementById('dl-modal');
+    m.classList.remove('show'); m.style.display='none';
+    document.body.classList.remove('modal-open');
+    const bd2 = document.getElementById('dl-backdrop');
+    if (bd2) bd2.remove();
     dlLoadStats();
     dlLoadSessions();
   } catch(e) {

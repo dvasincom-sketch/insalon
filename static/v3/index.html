@@ -39,6 +39,21 @@
 }
   
 </style>
+<style>
+@media (max-width: 767px) {
+  .obl-table-wrap { display: none !important; }
+  #obl-mobile { display: block !important; }
+}
+@media (min-width: 768px) {
+  #obl-mobile { display: none !important; }
+  .obl-table-wrap { display: block !important; }
+}
+@media (max-width: 767px) {
+  .obl-hide-mobile { display: none !important; }
+  #obl-mobile { display: block !important; }
+  .obl-table-wrap { display: none !important; }
+}
+</style>
 </head>
 <body class="antialiased">
 <div class="wrapper">
@@ -733,7 +748,7 @@
           <div class="card-header">
             <h3 class="card-title">График платежей на текущий месяц</h3>
           </div>
-          <div class="table-responsive">
+          <div class="obl-table-wrap table-responsive">
             <table class="table table-vcenter card-table">
               <thead>
                 <tr>
@@ -750,6 +765,7 @@
               </tbody>
             </table>
           </div>
+          <div id="obl-mobile"></div>
         </div>
       </div>
     </div>

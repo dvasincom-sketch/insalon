@@ -89,6 +89,16 @@ def import_csv(filepath: str):
 
             expense_category = categorize(description, category)
 
+            # Определяем project
+            if expense_category in ("transfer_in", "internal"):
+                project = "internal"
+            elif expense_category == "salary":
+                project = "salon"
+            elif expense_category == "rent":
+                project = "personal"
+            else:
+                project = "personal"
+
             rows.append({
                 "company_id": COMPANY_ID,
                 "datetime": dt,
@@ -100,7 +110,8 @@ def import_csv(filepath: str):
                 "mcc": mcc,
                 "description": description,
                 "cashback": cashback,
-                "expense_category": expense_category
+                "expense_category": expense_category,
+                "project": project
             })
 
     print(f"Всего строк: {len(rows)}")

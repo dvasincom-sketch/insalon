@@ -960,21 +960,25 @@ async def pl_detail(month: str, category: str):
             result = supabase.table("bank_transactions").select(
                 "date, amount, description, counterparty, period, category"
             ).eq("company_id", COMPANY_ID).eq(
-                "category", "salon_rent" if category in ("rent", "salon_rent") else "marketing"
-            ).or_(f"date.gte.{date_from},period.gte.{date_from}").or_(
-                f"date.lte.{date_to},period.lte.{date_to}"
+                "category", "salon_rent"
             ).execute()
-            # Фильтруем по периоду
             rows = []
             for t in result.data:
                 period = (t.get("period") or t["date"])[:7]
-                if period == month:
-                    rows.append({
-                        "label": t["counterparty"] or t["description"][:50],
-                        "detail": t["description"][:100],
-                        "amount": abs(float(t["amount"] or 0)),
-                        "date": t["date"]
-                    })
+                if period != month:
+                    continue
+                desc = (t.get("description") or "").lower()
+                is_marketing = "рекламн" in desc
+                if category == "marketing" and not is_marketing:
+                    continue
+                if category in ("rent", "salon_rent") and is_marketing:
+                    continue
+                rows.append({
+                    "label": t["counterparty"] or t["description"][:50],
+                    "detail": t["description"][:100],
+                    "amount": abs(float(t["amount"] or 0)),
+                    "date": t["date"]
+                })
             return {"category": category, "month": month, "rows": rows,
                     "total": sum(r["amount"] for r in rows)}
 

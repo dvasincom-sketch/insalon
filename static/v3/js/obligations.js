@@ -154,8 +154,10 @@ async function loadObligations() {
     .map(o => {
       const isPaid   = paidIds.has(o.id);
       const paidAmt  = paidAmts[o.id] || 0;
-      const isPast   = o.day_of_month && o.day_of_month < today;
-      const isToday  = o.day_of_month === today;
+      // Обязательство 1-го числа = выплата след. месяца, никогда не просрочено в текущем
+      const effectiveDay = (o.day_of_month === 1 && o.expense_category === 'salary') ? 99 : o.day_of_month;
+      const isPast   = effectiveDay && effectiveDay < today;
+      const isToday  = o.day_of_month === today && effectiveDay !== 99;
       const isDebt   = o.type === 'one_time_debt';
 
       // Динамическая сумма для ЗП
@@ -174,7 +176,7 @@ async function loadObligations() {
       }
 
       const statusBadge = isPaid
-        ? `<span class="badge bg-green text-white">✓ Оплачен ${paidAmt !== o.amount ? formatMoney(paidAmt) : ''}</span>`
+        ? `<span class="badge bg-green text-white">✓ Оплачен${paidAmt > 0 && paidAmt !== parseFloat(o.amount) ? ' ' + formatMoney(paidAmt) : ''}</span>`
         : isDebt
           ? '<span class="badge bg-red-lt">Долг</span>'
           : isPast

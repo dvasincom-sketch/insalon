@@ -196,6 +196,41 @@ async def get_summary():
     except:
         pass
 
+    # Автосверка с bank_transactions — ищем совпадения по сумме и месяцу
+    try:
+        bank_data = supabase.table("bank_transactions").select(
+            "amount, description, category, date"
+        ).eq("company_id", COMPANY_ID).gte(
+            "date", date_from
+        ).lte("date", date_to).lt("amount", 0).execute()
+
+        bank_amounts = {}
+        for b in bank_data.data:
+            amt = abs(float(b["amount"]))
+            key = round(amt)
+            if key not in bank_amounts:
+                bank_amounts[key] = []
+            bank_amounts[key].append(b)
+
+        for o in obligations.data:
+            if o["id"] in paid_ids:
+                continue
+            if not o.get("day_of_month"):
+                continue
+            if o.get("expense_category") in ("salary", "internal", "personal"):
+                continue
+            amt_key = round(float(o["amount"]))
+            # Ищем с допуском ±5₽
+            found = False
+            for delta in range(-5, 6):
+                if amt_key + delta in bank_amounts:
+                    paid_ids.add(o["id"])
+                    paid_amounts[o["id"]] = float(o["amount"])
+                    found = True
+                    break
+    except:
+        pass
+
     # Автоматически помечаем salary-обязательства как оплаченные
     # 15-го числа → выплата за 1-14 (first_half) → paid если все first_half paid
     # 1-го числа → выплата за 15-31 прошлого месяца → paid если все second_half прошлого месяца paid

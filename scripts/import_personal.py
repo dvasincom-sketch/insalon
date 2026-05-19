@@ -94,8 +94,6 @@ def import_csv(filepath: str):
                 project = "internal"
             elif expense_category == "salary":
                 project = "salon"
-            elif expense_category == "rent":
-                project = "personal"
             else:
                 project = "personal"
 

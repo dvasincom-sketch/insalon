@@ -421,7 +421,7 @@ async function loadReconciliation() {
   const onlineTbody   = document.getElementById('recon-online-tbody');
   if (!terminalTbody || !onlineTbody) return;
 
-  // Fitmost — отдельный запрос
+  // Fitmost загружается отдельным запросом с правильной логикой
   loadFitmostReconciliation();
 
   terminalTbody.innerHTML = data.months.map(m => {
@@ -556,8 +556,11 @@ async function showReconDetail(month, side, label) {
     </table>`;
 }
 
+// ── Fitmost: отдельная загрузка ───────────────────────────────
+let fitmostDetailCache = {};
+
 async function loadFitmostReconciliation() {
-  const tbody  = document.getElementById('recon-fitmost-tbody');
+  const tbody = document.getElementById('recon-fitmost-tbody');
   const debtEl = document.getElementById('fitmost-total-debt');
   if (!tbody) return;
 
@@ -567,120 +570,98 @@ async function loadFitmostReconciliation() {
     return;
   }
 
+  // Кэшируем детализацию по месяцам
+  fitmostDetailCache = data.records_by_month || {};
+
   tbody.innerHTML = data.months.map(m => {
     const diff      = m.month_diff || 0;
     const diffClass = diff >= 0 ? 'text-green' : 'text-orange';
     const diffStr   = (diff >= 0 ? '+' : '') + formatK(diff);
     const debtClass = m.debt > 0 ? 'text-orange' : 'text-green';
-    let badge = '';
-    if (m.count > 0 && m.month_received === 0)
-      badge = ' <span class="badge bg-red-lt">ожидается</span>';
-    else if (m.count > 0 && diff >= -500)
-      badge = ' <span class="badge bg-green-lt">✓</span>';
-    else if (m.count > 0)
-      badge = ' <span class="badge bg-orange-lt">!</span>';
 
-    // Ячейки «Записей/Ожидаем» и «Получено» кликабельны
-    const tdRecords  = m.count > 0
-      ? `<td class="text-end" style="cursor:pointer;text-decoration:underline dotted" title="Показать записи" onclick="showFitmostRecords('${m.month}')">${m.count}</td>`
-      + `<td class="text-end text-muted">${formatK(m.full_cost)}</td>`
-      + `<td class="text-end" style="cursor:pointer;text-decoration:underline dotted" title="Показать записи" onclick="showFitmostRecords('${m.month}')">${formatK(m.month_expect)}</td>`
-      : `<td class="text-end">0</td><td class="text-end text-muted">—</td><td class="text-end">—</td>`;
-    const tdPayments = m.month_received > 0
-      ? `<td class="text-end" style="cursor:pointer;text-decoration:underline dotted" title="Показать платежи" onclick="showFitmostPayments('${m.month}')">${formatK(m.month_received)}</td>`
-      : `<td class="text-end text-muted">—</td>`;
+    // Статус платежа за месяц
+    let statusBadge = '';
+    if (m.month_received > 0 && m.count > 0) {
+      statusBadge = diff >= -500
+        ? '<span class="badge bg-green-lt ms-1">✓</span>'
+        : '<span class="badge bg-orange-lt ms-1">!</span>';
+    } else if (m.count > 0 && m.month_received === 0) {
+      statusBadge = '<span class="badge bg-red-lt ms-1">ожидается</span>';
+    }
 
-    return '<tr>'
-      + '<td class="fw-bold">' + m.month + badge + '</td>'
-      + tdRecords
-      + tdPayments
+    return '<tr class="fitmost-row" style="cursor:pointer" data-month="' + m.month + '">'
+      + '<td class="fw-bold">' + m.month + statusBadge + '</td>'
+      + '<td class="text-end">' + m.count + '</td>'
+      + '<td class="text-end text-muted">' + formatK(m.full_cost) + '</td>'
+      + '<td class="text-end">' + formatK(m.month_expect) + '</td>'
+      + '<td class="text-end">' + formatK(m.month_received) + '</td>'
       + '<td class="text-end fw-bold ' + diffClass + '">' + diffStr + '</td>'
       + '<td class="text-end small ' + debtClass + '">' + formatK(m.debt) + '</td>'
       + '</tr>';
   }).join('');
 
+  // Итоговая строка долга
   if (debtEl) {
-    const cls = (data.total_debt || 0) > 0 ? 'text-orange' : 'text-green';
-    debtEl.innerHTML = 'Оказано услуг: <b>' + formatK(data.total_expect) + '</b>'
-      + ' &nbsp;|&nbsp; Получено: <b>' + formatK(data.total_received) + '</b>'
-      + ' &nbsp;|&nbsp; Долг Fitmost: <b class="' + cls + '">' + formatK(data.total_debt) + '</b>';
+    const debt = data.total_debt || 0;
+    const cls  = debt > 0 ? 'text-orange' : 'text-green';
+    debtEl.innerHTML =
+      'Итого оказано услуг: <b>' + formatK(data.total_expect) + '</b> &nbsp;|&nbsp; '
+      + 'Получено всего: <b>' + formatK(data.total_received) + '</b> &nbsp;|&nbsp; '
+      + 'Накопленный долг Fitmost: <b class="' + cls + '">' + formatK(debt) + '</b>';
   }
+
+  // Клик по строке → модал с детализацией
+  tbody.querySelectorAll('.fitmost-row').forEach(row => {
+    row.addEventListener('click', () => openFitmostDetail(row.dataset.month));
+  });
 }
 
-// Клик на «Записей / Ожидаем» — список визитов Fitmost за месяц
-async function showFitmostRecords(month) {
-  const modalEl = document.getElementById('pl-detail-modal');
+async function openFitmostDetail(month) {
+  const modalEl = document.getElementById('fitmost-detail-modal');
+  const titleEl = document.getElementById('fitmost-detail-title');
+  const bodyEl  = document.getElementById('fitmost-detail-body');
   if (!modalEl) return;
-  document.getElementById('pl-detail-title').textContent = `Fitmost записи — ${month}`;
-  document.getElementById('pl-detail-body').innerHTML = '<div class="text-center text-muted py-3">Загрузка...</div>';
+
+  titleEl.textContent = 'Записи Fitmost — ' + month;
+  bodyEl.innerHTML    = '<tr><td colspan="4" class="text-center text-muted py-3">Загрузка...</td></tr>';
   modalEl.style.display = 'flex';
 
-  const data = await fetchData(`/analytics/fitmost-detail?month=${month}`);
+  // Закрытие по клику на фон
+  modalEl.onclick = e => { if (e.target === modalEl) closeFitmostDetail(); };
+
+  // Загружаем детализацию
+  const data = await fetchData('/analytics/fitmost-detail?month=' + month);
   if (!data || data.error) {
-    document.getElementById('pl-detail-body').innerHTML = '<div class="text-danger py-3">Ошибка загрузки</div>';
+    bodyEl.innerHTML = '<tr><td colspan="4" class="text-danger">Ошибка загрузки</td></tr>';
     return;
   }
-  if (!data.rows || !data.rows.length) {
-    document.getElementById('pl-detail-body').innerHTML = '<div class="text-muted py-3 text-center">Нет записей за период</div>';
+
+  if (!data.rows || data.rows.length === 0) {
+    bodyEl.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Нет записей за период</td></tr>';
     return;
   }
-  const rows = data.rows.map(r =>
-    `<tr>
-      <td class="small text-muted" style="white-space:nowrap">${r.date}</td>
-      <td class="small">${r.client}</td>
-      <td class="small text-muted">${r.service}</td>
-      <td class="text-end">${formatMoney(r.cost)}</td>
-      <td class="text-end fw-bold">${formatMoney(r.expect)}</td>
-    </tr>`
-  ).join('');
-  document.getElementById('pl-detail-body').innerHTML = `
-    <table class="table table-vcenter table-sm">
-      <thead><tr>
-        <th style="width:90px">Дата</th><th>Клиент</th><th>Услуга</th>
-        <th class="text-end">Полная</th><th class="text-end">65%</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-      <tfoot><tr class="fw-bold">
-        <td colspan="3" class="text-end">Итого ожидается:</td>
-        <td class="text-end">${formatMoney(data.total_cost)}</td>
-        <td class="text-end">${formatMoney(data.total_expect)}</td>
-      </tr></tfoot>
-    </table>`;
+
+  bodyEl.innerHTML = data.rows.map(r =>
+    '<tr>'
+    + '<td class="text-muted small">' + r.date + '</td>'
+    + '<td>' + r.client + '</td>'
+    + '<td class="text-muted small">' + r.service + '</td>'
+    + '<td class="text-end">' + formatK(r.cost) + ' → <b>' + formatK(r.expect) + '</b></td>'
+    + '</tr>'
+  ).join('')
+  + '<tr class="table-light fw-bold">'
+  + '<td colspan="3" class="text-end">Итого ожидается (65%):</td>'
+  + '<td class="text-end">' + formatK(data.total_expect) + '</td>'
+  + '</tr>';
 }
 
-// Клик на «Получено» — список банковских платежей за месяц
-async function showFitmostPayments(month) {
-  const modalEl = document.getElementById('pl-detail-modal');
-  if (!modalEl) return;
-  document.getElementById('pl-detail-title').textContent = `Fitmost платежи из банка — ${month}`;
-  document.getElementById('pl-detail-body').innerHTML = '<div class="text-center text-muted py-3">Загрузка...</div>';
-  modalEl.style.display = 'flex';
+function closeFitmostDetail() {
+  const el = document.getElementById('fitmost-detail-modal');
+  if (el) el.style.display = 'none';
+}
 
-  const data = await fetchData(`/analytics/fitmost-payments?month=${month}`);
-  if (!data || data.error) {
-    document.getElementById('pl-detail-body').innerHTML = '<div class="text-danger py-3">Ошибка загрузки</div>';
-    return;
-  }
-  if (!data.rows || !data.rows.length) {
-    document.getElementById('pl-detail-body').innerHTML = '<div class="text-muted py-3 text-center">Платежей за этот месяц нет</div>';
-    return;
-  }
-  const rows = data.rows.map(r =>
-    `<tr>
-      <td class="small text-muted" style="white-space:nowrap">${r.date}</td>
-      <td class="small">${r.description || r.counterparty}</td>
-      <td class="text-end fw-bold">${formatMoney(r.amount)}</td>
-    </tr>`
-  ).join('');
-  document.getElementById('pl-detail-body').innerHTML = `
-    <table class="table table-vcenter table-sm">
-      <thead><tr>
-        <th style="width:90px">Дата</th><th>Описание</th><th class="text-end">Сумма</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-      <tfoot><tr class="fw-bold">
-        <td colspan="2" class="text-end">Итого получено:</td>
-        <td class="text-end">${formatMoney(data.total)}</td>
-      </tr></tfoot>
-    </table>`;
+function renderFitmostTable(months) {
+  // Старая функция — больше не используется для Fitmost-блока,
+  // вызывается из loadReconciliation для совместимости если нужна.
+  // Реальный рендер теперь в loadFitmostReconciliation().
 }

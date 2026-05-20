@@ -7,6 +7,7 @@ let devlogLoaded  = false;
 const TITLES = {
   pulse:       'Пульс системы',
   pl:          'P&L отчёт',
+  sales:       'Продажи товаров',
   staff:       'Сотрудники',
   obligations: 'Обязательства',
   devlog:      'Dev Log'
@@ -23,7 +24,7 @@ function _hideAllStaffTabs() {
 
 function showScreen(name, tab) {
   // Скрываем все экраны
-  ['pulse', 'pl', 'staff', 'obligations', 'devlog'].forEach(s => {
+  ['pulse', 'pl', 'sales', 'staff', 'obligations', 'devlog'].forEach(s => {
     const el = document.getElementById('screen-' + s);
     if (el) el.classList.add('d-none');
   });
@@ -42,6 +43,7 @@ function showScreen(name, tab) {
 
   // Lazy-load
   if (name === 'pl'          && !plLoaded)     { loadPL();          plLoaded     = true; }
+  if (name === 'sales') { loadProductSales(); }
   if (name === 'staff') { loadStaffMonthly(); staffLoaded = true; }
   if (name === 'obligations' && !oblLoaded)    { loadObligations(); oblLoaded    = true; }
   if (name === 'devlog'      && !devlogLoaded) { loadDevLog();      devlogLoaded = true; }
@@ -80,7 +82,7 @@ function showStaffTab(tab, el) {
 function routeFromHash() {
   const hash = location.hash.replace('#', '') || 'pulse';
   const [screen, tab] = hash.split('/');
-  const validScreens = ['pulse', 'pl', 'staff', 'obligations', 'devlog'];
+  const validScreens = ['pulse', 'pl', 'sales', 'staff', 'obligations', 'devlog'];
   const target = validScreens.includes(screen) ? screen : 'pulse';
   showScreen(target, tab || null);
 }

@@ -8,6 +8,9 @@ from app.analytics import (
 )
 from collections import defaultdict
 import os
+from fastapi import Body
+from typing import Optional
+import calendar as cal_module
 
 router = APIRouter(prefix="/analytics", tags=["Аналитика"])
 
@@ -1035,3 +1038,968 @@ async def pl_detail(month: str, category: str):
     except Exception as e:
         import traceback
         return {"error": str(e), "trace": traceback.format_exc()}
+
+# ── Справочники ────────────────────────────────────────────────
+VALID_CATEGORIES = {
+    "bank_fee", "cosmetics", "salon_rent", "credit", "internal",
+    "salary", "marketing", "materials", "food", "transport", "other",
+    "transfer_in", "production", "credit_card", "investor", "tax",
+}
+ 
+VALID_PROJECTS = {
+    "salon", "personal", "podcast", "book", "consulting", "internal",
+}
+ 
+ 
+# ── GET /analytics/transactions ────────────────────────────────
+@router.get("/transactions", summary="Объединённый аудит транзакций")
+async def get_transactions(
+    month:    Optional[str] = None,   # "2025-11"
+    source:   Optional[str] = None,   # bank | personal | cash
+    category: Optional[str] = None,
+    project:  Optional[str] = None,
+    page:     int = 1,
+    per_page: int = 50,
+):
+    """
+    Возвращает объединённый постраничный список транзакций из:
+      - bank_transactions
+      - personal_transactions
+      - (cash: bank_transactions с пометкой source='cash', если нужно добавить фильтр)
+    """
+    try:
+        from app.database import supabase
+ 
+        per_page = min(max(per_page, 1), 200)
+        offset   = (page - 1) * per_page
+ 
+        # Диапазон дат по месяцу
+        date_from = date_to = None
+        if month:
+            y, m    = map(int, month.split("-"))
+            last_day = cal_module.monthrange(y, m)[1]
+            date_from = f"{month}-01"
+            date_to   = f"{month}-{last_day:02d}"
+ 
+        rows = []
+ 
+        # ── 1. bank_transactions ──────────────────────────────
+        if not source or source == "bank":
+            q = supabase.table("bank_transactions").select(
+                "id, date, amount, description, counterparty, category, project"
+            ).eq("company_id", COMPANY_ID)
+ 
+            if date_from: q = q.gte("date", date_from)
+            if date_to:   q = q.lte("date", date_to)
+            if category == "__empty__": q = q.or_("category.is.null,category.eq.")
+            elif category:  q = q.eq("category", category)
+            if project:   q = q.eq("project",  project)
+ 
+            result = q.order("date", desc=True).execute()
+            for r in result.data:
+                rows.append({
+                    "id":          r["id"],
+                    "source":      "bank",
+                    "date":        r["date"][:10],
+                    "amount":      float(r["amount"] or 0),
+                    "description": r.get("description") or "",
+                    "counterparty":r.get("counterparty") or "",
+                    "category":    r.get("category") or "",
+                    "project":     r.get("project")  or "",
+                })
+ 
+        # ── 2. personal_transactions ──────────────────────────
+        if not source or source == "personal":
+            q = supabase.table("personal_transactions").select(
+                "id, date, amount, description, expense_category, project"
+            ).eq("company_id", COMPANY_ID)
+ 
+            if date_from: q = q.gte("date", date_from)
+            if date_to:   q = q.lte("date", date_to)
+            if category == "__empty__": q = q.or_("expense_category.is.null,expense_category.eq.")
+            elif category:  q = q.eq("expense_category", category)
+            if project:   q = q.eq("project",          project)
+ 
+            result = q.order("date", desc=True).execute()
+            for r in result.data:
+                rows.append({
+                    "id":          r["id"],
+                    "source":      "personal",
+                    "date":        r["date"][:10],
+                    "amount":      float(r["amount"] or 0),
+                    "description": r.get("description") or "",
+                    "counterparty": "",
+                    "category":    r.get("expense_category") or "",
+                    "project":     r.get("project") or "",
+                })
+ 
+        # ── 3. Касса (bank_transactions с source='cash') ──────
+        # Если в bank_transactions есть поле source/type = 'cash',
+        # они уже попадут в блок "bank". Отдельный блок не нужен,
+        # если структура другая — добавьте здесь аналогично.
+ 
+        # Сортировка объединённого списка по дате убыванием
+        rows.sort(key=lambda r: r["date"], reverse=True)
+ 
+        total = len(rows)
+        page_rows = rows[offset: offset + per_page]
+ 
+        return {
+            "total":    total,
+            "page":     page,
+            "per_page": per_page,
+            "rows":     page_rows,
+        }
+ 
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "trace": traceback.format_exc()}
+ 
+ 
+# ── PATCH /analytics/transactions/{id} ────────────────────────
+@router.patch("/transactions/{tx_id}", summary="Inline-редактирование транзакции")
+async def patch_transaction(
+    tx_id:  int,
+    body:   dict = Body(...),
+):
+    """
+    Обновляет category и/или project транзакции.
+    Тело: { "source": "bank"|"personal", "category": "...", "project": "..." }
+    """
+    try:
+        from app.database import supabase
+ 
+        source   = body.get("source", "bank")
+        category = body.get("category")
+        project  = body.get("project")
+ 
+        # Валидация
+        if category and category not in VALID_CATEGORIES:
+            return {"ok": False, "error": f"Неизвестная категория: {category}"}
+        if project and project not in VALID_PROJECTS:
+            return {"ok": False, "error": f"Неизвестный проект: {project}"}
+ 
+        update = {}
+        if category is not None:
+            update["category" if source == "bank" else "expense_category"] = category
+        if project is not None:
+            update["project"] = project
+ 
+        if not update:
+            return {"ok": False, "error": "Нечего обновлять"}
+ 
+        table = "bank_transactions" if source == "bank" else "personal_transactions"
+        result = supabase.table(table).update(update).eq("id", tx_id).execute()
+ 
+        return {"ok": True, "updated": len(result.data)}
+ 
+    except Exception as e:
+        import traceback
+        return {"ok": False, "error": str(e), "trace": traceback.format_exc()}
+
+# ── POST /analytics/transactions/auto-categorize ──────────────
+@router.post("/transactions/auto-categorize", summary="Авто-разметка транзакций по ключевым словам")
+async def auto_categorize_transactions():
+    try:
+        from app.database import supabase
+
+        RULES = [
+            ("зачисление средств по терминалам эквайринга", "transfer_in"),
+            ("оплата за услуги спа",                        "transfer_in"),
+            ("фитмост",                                     "transfer_in"),
+            ("комиссия за операции по терминалам",          "bank_fee"),
+            ("комиссия за внешний банковский перевод",      "bank_fee"),
+            ("комиссия за вывод средств",                   "bank_fee"),
+            ("плата за обслуживание счета",                 "bank_fee"),
+            ("плата за пакет",                              "bank_fee"),
+            ("плата за услугу оповещение",                  "bank_fee"),
+            ("плата за активный овердрафт",                 "bank_fee"),
+            ("плата за использованный лимит",               "bank_fee"),
+            ("задолженность по договору кредита",           "credit"),
+            ("погашение разрешенного овердрафта",           "credit"),
+            ("предоставление овердрафта",                   "credit"),
+            ("предоставление  овердрафта",                  "credit"),
+            ("перевод собственных средств",                 "internal"),
+            ("реестр",                                      "salary"),
+            ("оплата налогов",                              "tax"),
+            ("продюсирования",                              "production"),
+        ]
+
+        result = supabase.table("bank_transactions").select(
+            "id, description, counterparty"
+        ).eq("company_id", COMPANY_ID).or_(
+            "category.is.null,category.eq."
+        ).execute()
+
+        updated = 0
+        skipped = 0
+
+        for row in result.data:
+            desc = ((row.get("description") or "") + " " + (row.get("counterparty") or "")).lower()
+            matched = None
+            for keyword, category in RULES:
+                if keyword in desc:
+                    matched = category
+                    break
+
+            if matched:
+                supabase.table("bank_transactions").update(
+                    {"category": matched}
+                ).eq("id", row["id"]).execute()
+                updated += 1
+            else:
+                skipped += 1
+
+        return {"ok": True, "updated": updated, "skipped": skipped}
+
+    except Exception as e:
+        import traceback
+        return {"ok": False, "error": str(e), "trace": traceback.format_exc()}
+
+
+# ── GET /analytics/reconciliation ─────────────────────────────
+@router.get("/reconciliation", summary="Сверка: YClients vs Банк по месяцам")
+async def get_reconciliation():
+    """
+    Две сверки по месяцам:
+    1. Терминал ТБанк: YCL Расчетный счет vs bank transfer_in от ТБанк
+    2. Онлайн ЮKassa: YCL Эквайринг ЮKassa vs Аванпост
+    """
+    try:
+        from app.database import supabase
+        from collections import defaultdict
+
+        # ── YClients по месяцам и account ─────────────────────
+        ycl = fetch_all(supabase, lambda: supabase.table("transactions").select(
+            "date, amount, account, type_title"
+        ).eq("company_id", COMPANY_ID).gt("amount", 0))
+
+        EXCLUDE_TYPES = {"Продажа сертификатов"}
+        ycl_terminal = defaultdict(float)
+        ycl_online   = defaultdict(float)
+        ycl_cash     = defaultdict(float)
+
+        for r in ycl:
+            if r.get("type_title") in EXCLUDE_TYPES:
+                continue
+            month  = r["date"][:7]
+            amount = float(r["amount"] or 0)
+            if r["account"] == "Расчетный счет":
+                ycl_terminal[month] += amount
+            elif r["account"] == "Эквайринг ЮKassa":
+                ycl_online[month] += amount
+            elif r["account"] == "Основная касса":
+                ycl_cash[month] += amount
+
+        # ── Банк: ТБанк transfer_in ────────────────────────────
+        tbank = fetch_all(supabase, lambda: supabase.table("bank_transactions").select(
+            "date, amount, description, category, counterparty"
+        ).eq("company_id", COMPANY_ID).ilike("counterparty", "%тбанк%").gt("amount", 0))
+
+        import re as _re2
+        from datetime import date as _dt2, timedelta as _td2
+        bank_terminal = defaultdict(float)
+        for r in tbank:
+            if r.get("category") in ("transfer_in", "Входящие платежи"):
+                # Используем дату операции из description (банк зачисляет на след. день)
+                desc = r.get("description") or ""
+                m_d = _re2.search(r"от (\d{2})\.(\d{2})\.(\d{4})", desc)
+                if m_d:
+                    op_day = f"{m_d.group(3)}-{m_d.group(2)}-{m_d.group(1)}"
+                    # YCL день = op_day - 1
+                    ycl_day = (_dt2.fromisoformat(op_day) - _td2(days=1)).isoformat()
+                    bank_terminal[ycl_day[:7]] += float(r["amount"] or 0)
+                else:
+                    bank_terminal[r["date"][:7]] += float(r["amount"] or 0)
+
+        # ── Банк: ТБанк комиссия эквайринга ───────────────────
+        tbank_fees = fetch_all(supabase, lambda: supabase.table("bank_transactions").select(
+            "date, amount, description, category, counterparty"
+        ).eq("company_id", COMPANY_ID).ilike("counterparty", "%тбанк%").lt("amount", 0).eq("category", "bank_fee"))
+
+        bank_terminal_fee = defaultdict(float)
+        for r in tbank_fees:
+            bank_terminal_fee[r["date"][:7]] += abs(float(r["amount"] or 0))
+
+        # ── Банк: Fitmost ──────────────────────────────────────
+        fitmost = fetch_all(supabase, lambda: supabase.table("bank_transactions").select(
+            "date, amount"
+        ).eq("company_id", COMPANY_ID).ilike("counterparty", "%фитмост%").gt("amount", 0))
+
+        bank_fitmost = defaultdict(float)
+        for r in fitmost:
+            bank_fitmost[r["date"][:7]] += float(r["amount"] or 0)
+
+        # ── Fitmost записи из records ────────────────────────────
+        fitmost_records = fetch_all(supabase, lambda: supabase.table("records").select(
+            "date, service_cost"
+        ).eq("company_id", COMPANY_ID).eq("record_from", "Партнёры: Fitmost 511055"))
+
+        fitmost_count = defaultdict(int)
+        fitmost_full  = defaultdict(float)
+        for r in fitmost_records:
+            _m = r["date"][:7]
+            fitmost_count[_m] += 1
+            fitmost_full[_m]  += float(r["service_cost"] or 0)
+
+        # ── Банк: Аванпост ─────────────────────────────────────
+        avanpost = fetch_all(supabase, lambda: supabase.table("bank_transactions").select(
+            "date, amount, description, category, counterparty"
+        ).eq("company_id", COMPANY_ID).gt("amount", 0).or_(
+            "counterparty.ilike.%аванпост%,category.eq.acquiring"
+        ))
+
+
+        import re as _re
+        bank_online         = defaultdict(float)
+        bank_online_fee     = defaultdict(float)
+
+        for r in avanpost:
+            amount = float(r["amount"] or 0)
+            desc   = r.get("description") or ""
+            # Дата операции: "за DD.MM.YYYY" или "по DD.MM.YYYY"
+            m_date = _re.search(r"(?:за|по реестру за)\s+(\d{2})\.(\d{2})\.(\d{4})", desc)
+            # Комиссия: "Комиссия 475,20 руб" или "Комиссия 404,25 руб,"
+            m_fee  = _re.search(r"Комиссия\s+([\d\s]+[,.]\d+)\s+руб", desc)
+
+            if m_date:
+                op_month = f"{m_date.group(3)}-{m_date.group(2)}"
+                bank_online[op_month] += amount
+                if m_fee:
+                    fee_str = m_fee.group(1).replace("\xa0", "").replace(" ", "").replace(",", ".")
+                    bank_online_fee[op_month] += float(fee_str)
+            else:
+                # Диапазон дат "за период с DD.MM по DD.MM" — берём последнюю дату
+                m_range = _re.search(r"по\s+(\d{2})\.(\d{2})\.(\d{4})", desc)
+                op_month = f"{m_range.group(3)}-{m_range.group(2)}" if m_range else r["date"][:7]
+                bank_online[op_month] += amount
+                if m_fee:
+                    fee_str = m_fee.group(1).replace("\xa0", "").replace(" ", "").replace(",", ".")
+                    bank_online_fee[op_month] += float(fee_str)
+
+        # ── Сборка по месяцам ──────────────────────────────────
+        all_months = sorted(set(
+            list(ycl_terminal.keys()) + list(ycl_online.keys()) +
+            list(bank_terminal.keys()) + list(bank_online.keys())
+        ))
+
+        months = []
+        for m in all_months:
+            ycl_t   = round(ycl_terminal[m])
+            bank_t  = round(bank_terminal[m])
+            fee_t   = round(bank_terminal_fee[m])
+            fitmost = round(bank_fitmost[m])
+            fm_count  = fitmost_count[m]
+            fm_full   = round(fitmost_full[m])
+            fm_expect = round(fm_full * 0.65)
+            # gross банка = зачислено + комиссия (комиссия уже вычтена банком)
+            bank_t_gross = bank_t + fee_t
+            diff_t  = ycl_t - bank_t_gross
+
+
+            ycl_o        = round(ycl_online[m])
+            bank_o       = round(bank_online[m])
+            fee_o        = round(bank_online_fee.get(m, 0))
+            bank_o_gross = bank_o + fee_o
+            diff_o       = ycl_o - bank_o_gross
+            fee_o_pct    = round(fee_o / bank_o_gross * 100, 1) if bank_o_gross else 0
+
+            ycl_cash_m = round(ycl_cash[m])
+            # YCL total карточных = Расчетный счет + Касса (наличные/СБП)
+            ycl_t_total = ycl_t + ycl_cash_m
+
+            months.append({
+                "month": m,
+                "terminal_ycl":        ycl_t,
+                "terminal_ycl_cash":   ycl_cash_m,
+                "terminal_ycl_total":  ycl_t_total,
+                "terminal_bank":       bank_t,
+                "terminal_fee":        fee_t,
+                "terminal_bank_gross": bank_t_gross,
+                "terminal_fitmost":    fitmost,
+                "fitmost_count":       fm_count,
+                "fitmost_full":        fm_full,
+                "fitmost_expect":      fm_expect,
+                "fitmost_bank":        fitmost,
+                # Разница = банк gross - YCL карточных (без наличных)
+                "terminal_diff":       diff_t,
+                "terminal_ok":         abs(diff_t) < 5000,
+                "online_ycl":          ycl_o,
+                "online_bank":         bank_o,
+                "online_fee":          fee_o,
+                "online_fee_pct":      fee_o_pct,
+                "online_bank_gross":   bank_o_gross,
+                "online_diff":         diff_o,
+                "online_ok":           abs(diff_o) < 3000,
+            })
+
+        return {"months": list(reversed(months))}
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "trace": traceback.format_exc()}
+
+
+# ── GET /analytics/reconciliation-detail ──────────────────────
+@router.get("/reconciliation-detail", summary="Детализация сверки по месяцу и источнику")
+async def reconciliation_detail(month: str, side: str):
+    """
+    side: ycl_terminal | ycl_cash | bank_terminal | ycl_online | bank_online
+    """
+    try:
+        from app.database import supabase
+        import calendar as _cal
+
+        y, m = map(int, month.split("-"))
+        last_day = _cal.monthrange(y, m)[1]
+        date_from = f"{month}-01"
+        date_to   = f"{month}-{last_day:02d}"
+
+        rows = []
+        total = 0.0
+
+        if side == "ycl_terminal":
+            result = supabase.table("transactions").select(
+                "date, amount, account, type_title, client_name"
+            ).eq("company_id", COMPANY_ID).eq(
+                "account", "Расчетный счет"
+            ).gte("date", date_from).lte("date", date_to).order("date", desc=True).execute()
+            for r in result.data:
+                amt = float(r["amount"] or 0)
+                rows.append({"date": r["date"][:10], "label": r.get("type_title") or "", "detail": r.get("client_name") or "", "amount": amt})
+                total += amt
+
+        elif side == "ycl_cash":
+            result = supabase.table("transactions").select(
+                "date, amount, account, type_title, client_name"
+            ).eq("company_id", COMPANY_ID).eq(
+                "account", "Основная касса"
+            ).gte("date", date_from).lte("date", date_to).order("date", desc=True).execute()
+            for r in result.data:
+                amt = float(r["amount"] or 0)
+                rows.append({"date": r["date"][:10], "label": r.get("type_title") or "", "detail": r.get("client_name") or "", "amount": amt})
+                total += amt
+
+        elif side == "bank_terminal":
+            result = supabase.table("bank_transactions").select(
+                "date, amount, description, category"
+            ).eq("company_id", COMPANY_ID).ilike(
+                "counterparty", "%тбанк%"
+            ).gt("amount", 0).in_(
+                "category", ["transfer_in", "Входящие платежи"]
+            ).gte("date", date_from).lte("date", date_to).order("date", desc=True).execute()
+            for r in result.data:
+                amt = float(r["amount"] or 0)
+                rows.append({"date": r["date"][:10], "label": r.get("description") or "", "detail": r.get("category") or "", "amount": amt})
+                total += amt
+
+        elif side == "ycl_online":
+            result = supabase.table("transactions").select(
+                "date, amount, type_title, client_name"
+            ).eq("company_id", COMPANY_ID).eq(
+                "account", "Эквайринг ЮKassa"
+            ).gte("date", date_from).lte("date", date_to).order("date", desc=True).execute()
+            for r in result.data:
+                amt = float(r["amount"] or 0)
+                rows.append({"date": r["date"][:10], "label": r.get("type_title") or "", "detail": r.get("client_name") or "", "amount": amt})
+                total += amt
+
+        elif side == "bank_online":
+            import re as _re
+            result = supabase.table("bank_transactions").select(
+                "date, amount, description"
+            ).eq("company_id", COMPANY_ID).gt("amount", 0).or_(
+                "counterparty.ilike.%аванпост%,category.eq.acquiring"
+            ).gte("date", date_from).lte("date", date_to).order("date", desc=True).execute()
+            for r in result.data:
+                amt = float(r["amount"] or 0)
+                desc = r.get("description") or ""
+                m_fee = _re.search(r"Комиссия\s+([\d\s]+[,.]\d+)\s+руб", desc)
+                fee = float(m_fee.group(1).replace(" ", "").replace(",", ".")) if m_fee else 0
+                rows.append({"date": r["date"][:10], "label": desc[:80], "detail": f"комиссия {fee:.2f}" if fee else "", "amount": amt})
+                total += amt
+
+        return {"month": month, "side": side, "rows": rows, "total": round(total)}
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "trace": traceback.format_exc()}
+
+
+# Базовые цены Fitmost (из отчётов за месяцы до 30 посещений)
+FITMOST_BASE_PRICE = {
+    "Массаж спины":                              2275,
+    "Массаж шейно-воротниковой зоны":            1625,
+    "Массаж головы":                             2275,
+    "«\u200eГималайский экспресс»\u200e (Express Head SPA)": 3835,
+    "«\u200eГималайский дзен»\u200e (Relax Head SPA)":       5525,
+    "Массаж всего тела":                         3185,
+    "Массаж лица фирменный":                     2925,
+    "«\u200eПерерождение»\u200e (Premium Head SPA)":         7085,
+    "SPA для двоих (запись через администратора)": 11050,
+}
+
+def fitmost_rate(count: int) -> float:
+    if count <= 30:   return 1.0
+    if count <= 60:   return 0.95
+    if count <= 90:   return 0.90
+    return 0.85
+
+# ── GET /analytics/fitmost-reconciliation ─────────────────────
+@router.get("/fitmost-reconciliation", summary="Сверка Fitmost: записи vs платежи")
+async def fitmost_reconciliation():
+    try:
+        from app.database import supabase
+        from collections import defaultdict
+
+        # Записи Fitmost (авто-заглушки агрегатора)
+        fitmost_records = fetch_all(supabase, lambda: supabase.table("records").select(
+            "date, service_cost, client_name, service_title"
+        ).eq("company_id", COMPANY_ID).eq("record_from", "Партнёры: Fitmost 511055").order("date"))
+
+        by_month_records = defaultdict(list)
+        for r in fitmost_records:
+            m = r["date"][:7]
+            title = r.get("service_title") or ""
+            base = FITMOST_BASE_PRICE.get(title, float(r["service_cost"] or 0))
+            by_month_records[m].append({
+                "date":    r["date"][:10],
+                "client":  r.get("client_name") or "—",
+                "service": title,
+                "cost":    round(base),
+            })
+
+        # Платежи от Fitmost из банка
+        bank_payments = fetch_all(supabase, lambda: supabase.table("bank_transactions").select(
+            "date, amount, description"
+        ).eq("company_id", COMPANY_ID).ilike("counterparty", "%фитмост%").gt("amount", 0).order("date"))
+
+        MONTH_RU = {
+            "январ": "01", "феврал": "02", "март": "03", "апрел": "04",
+            "май": "05", "мая": "05", "июн": "06", "июл": "07",
+            "август": "08", "сентябр": "09", "октябр": "10",
+            "ноябр": "11", "декабр": "12",
+        }
+
+        by_month_payments = defaultdict(list)
+        for r in bank_payments:
+            desc = (r.get("description") or "").lower()
+            # Пробуем извлечь период из описания: "за Ноябрь 2025"
+            m_period = None
+            import re as _re
+            match = _re.search(r"за\s+(\w+)\s+(20\d{2})", desc)
+            if match:
+                month_word = match.group(1)[:6]
+                year       = match.group(2)
+                for key, num in MONTH_RU.items():
+                    if month_word.startswith(key[:4]):
+                        m_period = f"{year}-{num}"
+                        break
+            if not m_period:
+                # Fallback: сдвиг на -1 месяц от даты зачисления
+                from datetime import date as _d, timedelta as _td
+                pay_date = _d.fromisoformat(r["date"][:10])
+                m_period = (pay_date.replace(day=1) - _td(days=1)).strftime("%Y-%m")
+            by_month_payments[m_period].append({
+                "date":   r["date"][:10],
+                "amount": round(float(r["amount"] or 0)),
+                "desc":   (r.get("description") or "")[:80],
+            })
+
+        all_months = sorted(set(list(by_month_records.keys()) + list(by_month_payments.keys())))
+
+        cumulative_expect   = 0.0
+        cumulative_received = 0.0
+        months = []
+
+        for m in all_months:
+            recs     = by_month_records.get(m, [])
+            payments = by_month_payments.get(m, [])
+
+            # Динамическая комиссия Fitmost в зависимости от кол-ва бронирований
+            count = len(recs)
+            rate  = fitmost_rate(count)
+            month_full_cost = sum(r["cost"] for r in recs)
+            month_expect    = round(month_full_cost * rate)
+            month_received = sum(p["amount"] for p in payments)
+
+            cumulative_expect   += month_expect
+            cumulative_received += month_received
+
+            months.append({
+                "month":               m,
+                "count":               len(recs),
+                "full_cost":           round(sum(r["cost"] for r in recs)),
+                "month_expect":        round(month_expect),
+                "month_received":      round(month_received),
+                "month_diff":          round(month_received - month_expect),
+                "cumulative_expect":   round(cumulative_expect),
+                "cumulative_received": round(cumulative_received),
+                "debt":                round(cumulative_expect - cumulative_received),
+                "payments":            payments,
+            })
+
+        return {
+            "months":         list(reversed(months)),
+            "total_expect":   round(cumulative_expect),
+            "total_received": round(cumulative_received),
+            "total_debt":     round(cumulative_expect - cumulative_received),
+        }
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "trace": traceback.format_exc()}
+
+
+# ── GET /analytics/fitmost-detail ─────────────────────────────
+@router.get("/fitmost-detail", summary="Детализация записей Fitmost за месяц")
+async def fitmost_detail(month: str):
+    try:
+        from app.database import supabase
+        import calendar as _cal
+
+        y, m_int  = map(int, month.split("-"))
+        last_day  = _cal.monthrange(y, m_int)[1]
+        date_from = f"{month}-01"
+        date_to   = f"{month}-{last_day:02d}"
+
+        result = supabase.table("records").select(
+            "date, service_cost, client_name, service_title"
+        ).eq("company_id", COMPANY_ID).eq(
+            "record_from", "Партнёры: Fitmost 511055"
+        ).gte("date", date_from).lte("date", date_to + "T23:59:59").order("date").execute()
+
+        rows = []
+        total_cost = 0.0
+        for r in result.data:
+            title = r.get("service_title") or ""
+            base  = FITMOST_BASE_PRICE.get(title, float(r["service_cost"] or 0))
+            total_cost += base
+            rows.append({
+                "date":    r["date"][:10],
+                "client":  r.get("client_name") or "—",
+                "service": title,
+                "cost":    round(base),
+            })
+
+        rate         = fitmost_rate(len(rows))
+        total_expect = round(total_cost * rate)
+
+        return {
+            "month":        month,
+            "rate":         rate,
+            "rows":         rows,
+            "total_cost":   round(total_cost),
+            "total_expect": total_expect,
+        }
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "trace": traceback.format_exc()}
+
+
+# ── GET /analytics/fitmost-payments ───────────────────────────
+@router.get("/fitmost-payments", summary="Платежи Fitmost из банка за месяц")
+async def fitmost_payments(month: str):
+    try:
+        from app.database import supabase
+        import calendar as _cal
+
+        y, m_int  = map(int, month.split("-"))
+        last_day  = _cal.monthrange(y, m_int)[1]
+        date_from = f"{month}-01"
+        date_to   = f"{month}-{last_day:02d}"
+
+        # Ищем платёж по описанию — там указан месяц за который он пришёл
+        import re as _re
+        MONTH_RU_MAP = {
+            "январ": "01", "феврал": "02", "март": "03", "апрел": "04",
+            "май": "05", "мая": "05", "июн": "06", "июл": "07",
+            "август": "08", "сентябр": "09", "октябр": "10",
+            "ноябр": "11", "декабр": "12",
+        }
+        all_payments = supabase.table("bank_transactions").select(
+            "date, amount, description, counterparty"
+        ).eq("company_id", COMPANY_ID).ilike(
+            "counterparty", "%фитмост%"
+        ).gt("amount", 0).order("date").execute()
+
+        rows = []
+        total = 0.0
+        for r in all_payments.data:
+            desc = (r.get("description") or "").lower()
+            match = _re.search(r"за\s+(\w+)\s+(20\d{2})", desc)
+            pay_month = None
+            if match:
+                word = match.group(1)[:6]
+                year = match.group(2)
+                for key, num in MONTH_RU_MAP.items():
+                    if word.startswith(key[:4]):
+                        pay_month = f"{year}-{num}"
+                        break
+            if not pay_month:
+                from datetime import date as _d, timedelta as _td
+                pd = _d.fromisoformat(r["date"][:10])
+                pay_month = (pd.replace(day=1) - _td(days=1)).strftime("%Y-%m")
+            if pay_month != month:
+                continue
+            amt = float(r["amount"] or 0)
+            total += amt
+            rows.append({
+                "date":        r["date"][:10],
+                "amount":      round(amt),
+                "description": (r.get("description") or "")[:100],
+                "counterparty": r.get("counterparty") or "",
+            })
+
+        return {"month": month, "rows": rows, "total": round(total)}
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "trace": traceback.format_exc()}
+@router.get("/reconciliation-days", summary="Сверка по дням внутри месяца")
+async def reconciliation_days(month: str):
+    try:
+        from app.database import supabase
+        from collections import defaultdict
+        import calendar as _cal
+        import re as _re
+
+        y, m = map(int, month.split("-"))
+        last_day = _cal.monthrange(y, m)[1]
+        date_from = f"{month}-01"
+        date_to   = f"{month}-{last_day:02d}"
+
+        # YCL по дням — только реальные оплаты (без сертификатов)
+        # Берём +1 день до начала месяца — банк зачисляет на след. день
+        EXCLUDE_TYPES = {"Продажа сертификатов"}
+        from datetime import date as _date2, timedelta as _td2
+        date_from_ext = (_date2.fromisoformat(date_from) - _td2(days=1)).isoformat()
+        ycl = supabase.table("transactions").select(
+            "date, amount, account, type_title"
+        ).eq("company_id", COMPANY_ID).gt("amount", 0).gte(
+            "date", date_from_ext + "T00:00:00"
+        ).lte("date", date_to + "T23:59:59").execute()
+
+        ycl_card = defaultdict(float)
+        ycl_cash = defaultdict(float)
+        for r in ycl.data:
+            if r.get("type_title") in EXCLUDE_TYPES:
+                continue
+            day = r["date"][:10]
+            amt = float(r["amount"] or 0)
+            if r["account"] == "Расчетный счет":
+                ycl_card[day] += amt
+            elif r["account"] == "Основная касса":
+                ycl_cash[day] += amt
+
+        # Банк эквайринг — по дате операции из description
+        bank = supabase.table("bank_transactions").select(
+            "date, amount, description, category"
+        ).eq("company_id", COMPANY_ID).ilike(
+            "counterparty", "%тбанк%"
+        ).gt("amount", 0).in_(
+            "category", ["transfer_in", "Входящие платежи"]
+        ).gte("date", date_from).lte("date", date_to).execute()
+
+        bank_by_opday = defaultdict(float)
+        for r in bank.data:
+            desc = r.get("description") or ""
+            m_date = _re.search(r"от (\d{2})\.(\d{2})\.(\d{4})", desc)
+            if m_date:
+                op_day = f"{m_date.group(3)}-{m_date.group(2)}-{m_date.group(1)}"
+            else:
+                op_day = r["date"][:10]
+            bank_by_opday[op_day] += float(r["amount"] or 0)
+
+        # Объединяем все дни
+        from datetime import date as _date, timedelta as _td
+        all_days = sorted(set(
+            list(ycl_card.keys()) + list(ycl_cash.keys()) + list(bank_by_opday.keys())
+        ))
+
+        # Продажи товаров — вычитаем из банка (они уже учтены отдельно)
+        sales = supabase.table("product_sales").select(
+            "date, amount, account"
+        ).eq("company_id", COMPANY_ID).gte("date", date_from_ext).lte("date", date_to).execute()
+
+        sales_card_by_day = defaultdict(float)
+        for r in sales.data:
+            if r.get("account") == "card":
+                sales_card_by_day[r["date"][:10]] += float(r["amount"] or 0)
+
+        # Перестраиваем bank_by_opday: ключ = дата операции в YCL (банк зачисляет на след. день)
+        # "Зачисление от DD.MM" → операция была DD.MM - 1 рабочий день
+        bank_by_ycl_day = defaultdict(float)  # ключ = дата в YCL
+        for op_day, amt in bank_by_opday.items():
+            d = _date.fromisoformat(op_day)
+            ycl_day = (d - _td(days=1)).isoformat()
+            bank_by_ycl_day[ycl_day] += amt
+
+        # Вычитаем карточные продажи товаров из банка
+        for day, amt in sales_card_by_day.items():
+            bank_by_ycl_day[day] -= amt
+
+        all_days = sorted(set(
+            list(ycl_card.keys()) + list(ycl_cash.keys()) + list(bank_by_ycl_day.keys())
+        ))
+        # Последний день месяца помечаем как пограничный но не исключаем
+
+        rows = []
+        for day in all_days:
+            card     = round(ycl_card[day])
+            cash     = round(ycl_cash[day])
+            bank_amt = round(bank_by_ycl_day[day])
+            diff     = card - bank_amt
+
+            # Подозрение: банк есть, карта=0, но касса есть → карта записана как касса?
+            suspicious = bank_amt > 500 and card == 0 and cash > 0 and cash < bank_amt * 0.8
+            # Нет в YCL: банк есть, карта=0, касса=0
+            real_missing = bank_amt > 500 and card == 0 and cash < 500
+            mismatch = abs(diff) > 500
+
+            boundary = (day == date_to)  # последний день — карта уйдёт в следующий месяц
+            rows.append({
+                "day":          day,
+                "ycl_card":     card,
+                "ycl_cash":     cash,
+                "bank":         bank_amt,
+                "diff":         diff,
+                "suspicious":   suspicious,
+                "real_missing": real_missing,
+                "mismatch":     mismatch or (boundary and card > 0),
+                "boundary":     boundary,
+            })
+
+        # Комиссия ТБанк за период
+        fee_result = supabase.table("bank_transactions").select(
+            "amount"
+        ).eq("company_id", COMPANY_ID).ilike(
+            "counterparty", "%тбанк%"
+        ).eq("category", "bank_fee").gte("date", date_from).lte("date", date_to).execute()
+        total_fee = round(sum(abs(float(r["amount"] or 0)) for r in fee_result.data))
+
+        # total_ycl — только текущий месяц (без расширенного дня)
+        total_ycl  = round(sum(v for k, v in ycl_card.items() if k >= date_from))
+        total_bank_shifted = round(sum(bank_by_ycl_day.values()))
+        total_bank_gross   = total_bank_shifted + total_fee
+
+        return {
+            "month": month,
+            "rows":  rows,
+            "total_ycl_card":     total_ycl,
+            "total_ycl_cash":     round(sum(ycl_cash.values())),
+            "total_bank":         round(sum(bank_by_opday.values())),
+            "total_bank_shifted": total_bank_shifted,
+            "total_bank_gross":   total_bank_gross,
+            "total_fee":          total_fee,
+            "total_diff":         total_ycl - total_bank_gross,
+        }
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "trace": traceback.format_exc()}
+
+
+# ══════════════════════════════════════════════════════════════
+# ПРОДАЖИ ТОВАРОВ
+# ══════════════════════════════════════════════════════════════
+
+STAFF_LIST = [
+    "Александра", "Анастасия", "Анна", "Екатерина",
+    "Марина", "Мария", "Светлана", "София", "Татьяна"
+]
+
+@router.get("/products", summary="Справочник товаров")
+async def get_products():
+    try:
+        from app.database import supabase
+        result = supabase.table("products").select("*").eq(
+            "company_id", COMPANY_ID).eq("is_active", True).order("name").execute()
+        return {"products": result.data}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.post("/products", summary="Добавить товар")
+async def add_product(body: dict = Body(...)):
+    try:
+        from app.database import supabase
+        result = supabase.table("products").insert({
+            "company_id": COMPANY_ID,
+            "name": body["name"],
+            "price": body.get("price"),
+            "is_active": True,
+        }).execute()
+        return {"ok": True, "product": result.data[0]}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@router.get("/product-sales", summary="Продажи товаров")
+async def get_product_sales(month: str = None, staff: str = None):
+    try:
+        from app.database import supabase
+        import calendar as _cal
+
+        q = supabase.table("product_sales").select(
+            "*, products(name, price)"
+        ).eq("company_id", COMPANY_ID)
+
+        if month:
+            y, m = map(int, month.split("-"))
+            last_day = _cal.monthrange(y, m)[1]
+            q = q.gte("date", f"{month}-01").lte("date", f"{month}-{last_day:02d}")
+        if staff:
+            q = q.eq("staff_name", staff)
+
+        result = q.order("date", desc=True).execute()
+
+        # Итого по мастерам
+        from collections import defaultdict
+        by_staff = defaultdict(float)
+        total = 0.0
+        for r in result.data:
+            by_staff[r["staff_name"]] += float(r["amount"] or 0)
+            total += float(r["amount"] or 0)
+
+        bonuses = {s: round(v * 0.1) for s, v in by_staff.items()}
+
+        return {
+            "rows": result.data,
+            "total": round(total),
+            "by_staff": dict(by_staff),
+            "bonuses": bonuses,
+        }
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "trace": traceback.format_exc()}
+
+
+@router.post("/product-sales", summary="Добавить продажу")
+async def add_product_sale(body: dict = Body(...)):
+    try:
+        from app.database import supabase
+        result = supabase.table("product_sales").insert({
+            "company_id": COMPANY_ID,
+            "date":       body["date"],
+            "staff_name": body["staff_name"],
+            "product_id": body.get("product_id"),
+            "quantity":   body.get("quantity", 1),
+            "amount":     body["amount"],
+            "account":    body.get("account", "cash"),
+            "notes":      body.get("notes", ""),
+        }).execute()
+        return {"ok": True, "sale": result.data[0]}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@router.delete("/product-sales/{sale_id}", summary="Удалить продажу")
+async def delete_product_sale(sale_id: int):
+    try:
+        from app.database import supabase
+        supabase.table("product_sales").delete().eq("id", sale_id).execute()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}

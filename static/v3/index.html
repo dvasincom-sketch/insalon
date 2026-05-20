@@ -86,6 +86,14 @@
             </a>
           </li>
           <li class="nav-item">
+            <a class="nav-link" href="#sales" data-screen="sales">
+              <span class="nav-link-icon d-md-none d-lg-inline-block">
+                <i class="ti ti-shopping-cart"></i>
+              </span>
+              <span class="nav-link-title">Продажи товаров</span>
+            </a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link" href="#staff" data-screen="staff">
               <span class="nav-link-icon d-md-none d-lg-inline-block">
                 <i class="ti ti-users"></i>
@@ -363,99 +371,440 @@
       </div>
     </div>
 
-    <!-- Screen 2: P&L -->
+<!-- Screen 2: P&L -->
     <div class="page-body d-none" id="screen-pl">
       <div class="container-xl">
+ 
+        <!-- ── Под-вкладки P&L / Транзакции ── -->
+        <div class="card mb-3">
+          <div class="card-header">
+            <ul class="nav nav-tabs card-header-tabs">
+              <li class="nav-item">
+                <a class="nav-link active" href="javascript:void(0)"
+                   data-pl-tab="pl" onclick="showPLTab('pl')"
+                   style="padding:0.5rem 0.75rem;white-space:nowrap">
+                  📊 P&L
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="javascript:void(0)"
+                   data-pl-tab="transactions" onclick="showPLTab('transactions')"
+                   style="padding:0.5rem 0.75rem;white-space:nowrap">
+                  🔍 Транзакции
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="javascript:void(0)"
+                   data-pl-tab="reconciliation" onclick="showPLTab('reconciliation')"
+                   style="padding:0.5rem 0.75rem;white-space:nowrap">
+                  ⚖️ Сверка
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div>
+ 
+        <!-- ══ ТАБ: P&L ══════════════════════════════════════════ -->
+        <div id="pl-tab-pl" data-pl-tab-content>
+ 
+          <!-- Snapshot карточки -->
+          <div class="row row-deck row-cards mb-3" id="pl-snapshot">
+            <div class="col-6 col-md-3">
+              <div class="card">
+                <div class="card-body">
+                  <div class="text-muted small mb-1">Выручка (посл. месяц)</div>
+                  <div class="h2 mb-0" id="pl-snap-revenue">—</div>
+                  <div class="text-muted small mt-1" id="pl-snap-revenue-delta"></div>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="card">
+                <div class="card-body">
+                  <div class="text-muted small mb-1">Расходы (посл. месяц)</div>
+                  <div class="h2 mb-0 text-red" id="pl-snap-expenses">—</div>
+                  <div class="text-muted small mt-1" id="pl-snap-expenses-delta"></div>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="card">
+                <div class="card-body">
+                  <div class="text-muted small mb-1">EBITDA (посл. месяц)</div>
+                  <div class="h2 mb-0" id="pl-snap-ebitda">—</div>
+                  <div class="text-muted small mt-1" id="pl-snap-margin"></div>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="card">
+                <div class="card-body">
+                  <div class="text-muted small mb-1">Лучший месяц</div>
+                  <div class="h2 mb-0 text-green" id="pl-snap-best-val">—</div>
+                  <div class="text-muted small mt-1" id="pl-snap-best-month"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+ 
+          <!-- Таблица P&L -->
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title" id="pl-table-title">P&L по месяцам</h3>
+              <div class="card-options d-flex align-items-center gap-2">
+                <span class="badge bg-green-lt" id="pl-clean-badge">Очищено от личных расходов</span>
+                <select class="form-select form-select-sm" id="pl-project-select"
+                        onchange="onPLProjectChange()" style="width:auto">
+                  <option value="salon" selected>✨ Салон (HeadSPA)</option>
+                  <option value="podcast">🎙 Подкаст (NOISHA)</option>
+                  <option value="book">📖 Книга</option>
+                  <option value="consulting">💼 Консалтинг</option>
+                  <option value="startup">🚀 Стартап</option>
+                  <option value="consolidated">🗂 Консолидированный</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-vcenter card-table" style="font-size:13px">
+                <thead>
+                  <tr>
+                    <th rowspan="2" style="vertical-align:middle;min-width:80px">Месяц</th>
+                    <th colspan="5" class="text-center text-green fw-bold"
+                        style="background:#d3f9d8;border-bottom:none;padding-bottom:4px">Выручка</th>
+                    <th colspan="7" class="text-center text-red fw-bold"
+                        style="background:#ffe0e0;border-bottom:none;padding-bottom:4px">Расходы</th>
+                    <th rowspan="2" class="text-end fw-bold"
+                        style="vertical-align:middle;background:#e8f4fd;min-width:80px">EBITDA</th>
+                  </tr>
+                  <tr>
+                    <th class="text-end" style="background:#f0fdf4">Услуги</th>
+                    <th class="text-end" style="background:#f0fdf4">Сертиф.</th>
+                    <th class="text-end" style="background:#f0fdf4">Абон.</th>
+                    <th class="text-end" style="background:#f0fdf4">Fitmost</th>
+                    <th class="text-end fw-bold" style="background:#d3f9d8">Итого</th>
+                    <th class="text-end" style="background:#fff5f5">ФОТ</th>
+                    <th class="text-end" style="background:#fff5f5">Аренда</th>
+                    <th class="text-end" style="background:#fff5f5">Космет.</th>
+                    <th class="text-end" style="background:#fff5f5">Матер.</th>
+                    <th class="text-end" style="background:#fff5f5">Маркет.</th>
+                    <th class="text-end" style="background:#fff5f5">Банк</th>
+                    <th class="text-end fw-bold" style="background:#ffe0e0">Итого</th>
+                  </tr>
+                </thead>
+                <tbody id="pl-tbody">
+                  <tr><td colspan="14" class="text-center text-muted py-4">Загрузка...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+ 
+        </div><!-- /pl-tab-pl -->
+ 
+        <!-- ══ ТАБ: Транзакции ════════════════════════════════════ -->
+        <div id="pl-tab-transactions" data-pl-tab-content class="d-none">
+ 
+          <!-- Фильтры -->
+          <div class="card mb-3">
+            <div class="card-body py-2">
+              <div class="row g-2 align-items-end">
+ 
+                <!-- Месяц -->
+                <div class="col-auto">
+                  <label class="form-label small text-muted mb-1">Месяц</label>
+                  <select class="form-select form-select-sm" id="tx-filter-month"
+                          onchange="loadTransactions()" style="min-width:140px">
+                    <option value="">Все месяцы</option>
+                    <option value="2026-05">Май 2026</option>
+                    <option value="2026-04">Апрель 2026</option>
+                    <option value="2026-03">Март 2026</option>
+                    <option value="2026-02">Февраль 2026</option>
+                    <option value="2026-01">Январь 2026</option>
+                    <option value="2025-12">Декабрь 2025</option>
+                    <option value="2025-11">Ноябрь 2025</option>
+                    <option value="2025-10">Октябрь 2025</option>
+                    <option value="2025-09">Сентябрь 2025</option>
+                  </select>
+                </div>
+ 
+                <!-- Источник -->
+                <div class="col-auto">
+                  <label class="form-label small text-muted mb-1">Источник</label>
+                  <select class="form-select form-select-sm" id="tx-filter-source"
+                          onchange="loadTransactions()" style="min-width:130px">
+                    <option value="">Все источники</option>
+                    <option value="bank">🏦 Банк</option>
+                    <option value="personal">👤 Личные</option>
+                    <option value="cash">💵 Наличные</option>
+                  </select>
+                </div>
+ 
+                <!-- Категория -->
+                <div class="col-auto">
+                  <label class="form-label small text-muted mb-1">Категория</label>
+                  <select class="form-select form-select-sm" id="tx-filter-category"
+                          onchange="loadTransactions()" style="min-width:140px">
+                    <option value="">Все категории</option>
+                    <option value="__empty__">⚠️ Без категории</option>
+                    <option value="bank_fee">bank_fee</option>
+                    <option value="cosmetics">cosmetics</option>
+                    <option value="salon_rent">salon_rent</option>
+                    <option value="credit">credit</option>
+                    <option value="internal">internal</option>
+                    <option value="salary">salary</option>
+                    <option value="marketing">marketing</option>
+                    <option value="materials">materials</option>
+                    <option value="food">food</option>
+                    <option value="transport">transport</option>
+                    <option value="other">other</option>
+                    <option value="transfer_in">transfer_in</option>
+                    <option value="production">production</option>
+                    <option value="credit_card">credit_card</option>
+                    <option value="investor">investor</option>
+                    <option value="tax">tax</option>
+                  </select>
+                </div>
+ 
+                <!-- Проект -->
+                <div class="col-auto">
+                  <label class="form-label small text-muted mb-1">Проект</label>
+                  <select class="form-select form-select-sm" id="tx-filter-project"
+                          onchange="loadTransactions()" style="min-width:130px">
+                    <option value="">Все проекты</option>
+                    <option value="salon">salon</option>
+                    <option value="personal">personal</option>
+                    <option value="podcast">podcast</option>
+                    <option value="book">book</option>
+                    <option value="consulting">consulting</option>
+                    <option value="internal">internal</option>
+                  </select>
+                </div>
+ 
+                <!-- Кнопка сброса -->
+                <div class="col-auto">
+                  <label class="form-label small text-muted mb-1">&nbsp;</label>
+                  <button class="btn btn-sm btn-outline-secondary d-block"
+                          onclick="resetTxFilters()">✕ Сброс</button>
+                </div>
+ 
+                <!-- Счётчик результатов -->
+                <div class="col-auto ms-auto align-self-end">
+                  <span class="text-muted small" id="tx-summary"></span>
+                </div>
+ 
+              </div>
+            </div>
+          </div>
+ 
+          <!-- Таблица -->
+          <div class="card">
+            <div class="table-responsive">
+              <table class="table table-vcenter table-hover card-table" style="font-size:13px">
+                <thead class="table-light">
+                  <tr>
+                    <th style="min-width:90px">Дата</th>
+                    <th style="min-width:90px">Источник</th>
+                    <th style="min-width:180px">Описание</th>
+                    <th style="min-width:130px">Контрагент</th>
+                    <th style="min-width:120px">Категория</th>
+                    <th style="min-width:120px">Проект</th>
+                    <th class="text-end" style="min-width:100px">Сумма</th>
+                    <th style="width:32px"></th>
+                  </tr>
+                </thead>
+                <tbody id="tx-tbody">
+                  <tr><td colspan="8" class="text-center text-muted py-4">Выберите фильтры и нажмите «Обновить»</td></tr>
+                </tbody>
+              </table>
+            </div>
+ 
+            <!-- Пагинация -->
+            <div class="card-footer d-flex align-items-center">
+              <div id="tx-pagination"></div>
+            </div>
+          </div>
+ 
+        </div><!-- /pl-tab-transactions -->
 
-        <!-- Snapshot карточки -->
-        <div class="row row-deck row-cards mb-3" id="pl-snapshot">
-          <div class="col-6 col-md-3">
-            <div class="card">
-              <div class="card-body">
-                <div class="text-muted small mb-1">Выручка (посл. месяц)</div>
-                <div class="h2 mb-0" id="pl-snap-revenue">—</div>
-                <div class="text-muted small mt-1" id="pl-snap-revenue-delta"></div>
+        <!-- ══ ТАБ: Сверка ══════════════════════════════════════ -->
+        <div id="pl-tab-reconciliation" data-pl-tab-content class="d-none">
+          <div class="row row-deck row-cards mb-3">
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-header">
+                  <h3 class="card-title">🏦 Терминал ТБанк</h3>
+                  <div class="card-options">
+                    <span class="badge bg-blue-lt">YClients Расчетный счет vs Банк</span>
+                  </div>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-vcenter table-sm" style="font-size:13px">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Месяц</th>
+                        <th class="text-end">YCL карта</th>
+                        <th class="text-end">YCL касса</th>
+                        <th class="text-end">Банк gross</th>
+                        <th class="text-end">Комиссия</th>
+                        <th class="text-end">Разница</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody id="recon-terminal-tbody">
+                      <tr><td colspan="6" class="text-center text-muted py-3">Загрузка...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-header">
+                  <h3 class="card-title">💳 Онлайн Аванпост / ЮKassa</h3>
+                  <div class="card-options">
+                    <span class="badge bg-purple-lt">YClients ЮKassa vs Аванпост</span>
+                  </div>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-vcenter table-sm" style="font-size:13px">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Месяц</th>
+                        <th class="text-end">YCL</th>
+                        <th class="text-end">Банк gross</th>
+                        <th class="text-end">Комиссия %</th>
+                        <th class="text-end">Разница</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody id="recon-online-tbody">
+                      <tr><td colspan="6" class="text-center text-muted py-3">Загрузка...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
-          <div class="col-6 col-md-3">
-            <div class="card">
-              <div class="card-body">
-                <div class="text-muted small mb-1">Расходы (посл. месяц)</div>
-                <div class="h2 mb-0 text-red" id="pl-snap-expenses">—</div>
-                <div class="text-muted small mt-1" id="pl-snap-expenses-delta"></div>
+          <div class="row row-deck row-cards mb-3">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-header">
+                  <h3 class="card-title">🤝 Fitmost — сверка записей и платежей</h3>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-vcenter table-sm" style="font-size:13px">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Месяц записей</th>
+                        <th class="text-end">Записей</th>
+                        <th class="text-end text-muted">Полная стоим.</th>
+                        <th class="text-end">Ожидаем (Fitmost)</th>
+                        <th class="text-end">Получено</th>
+                        <th class="text-end">Разница</th>
+                        <th class="text-end">Долг накопл.</th>
+                      </tr>
+                    </thead>
+                    <tbody id="recon-fitmost-tbody">
+                      <tr><td colspan="7" class="text-center text-muted py-3">Загрузка...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="card-footer text-muted small" id="fitmost-total-debt"></div>
               </div>
             </div>
           </div>
-          <div class="col-6 col-md-3">
-            <div class="card">
-              <div class="card-body">
-                <div class="text-muted small mb-1">EBITDA (посл. месяц)</div>
-                <div class="h2 mb-0" id="pl-snap-ebitda">—</div>
-                <div class="text-muted small mt-1" id="pl-snap-margin"></div>
-              </div>
+          <div class="card">
+            <div class="card-body py-2 text-muted small">
+              <b>Терминал:</b> разница = наличные + СБП переводы на личную карту + Fitmost.<br>
+              <b>Онлайн:</b> разница может быть из-за задержки перечислений Аванпоста.<br>
+              <b>Fitmost:</b> платит раз в месяц с задержкой 1-2 мес.
             </div>
           </div>
-          <div class="col-6 col-md-3">
-            <div class="card">
-              <div class="card-body">
-                <div class="text-muted small mb-1">Лучший месяц</div>
-                <div class="h2 mb-0 text-green" id="pl-snap-best-val">—</div>
-                <div class="text-muted small mt-1" id="pl-snap-best-month"></div>
+        </div><!-- /pl-tab-reconciliation -->
+
+      </div>
+    </div><!-- /screen-pl -->
+
+    <!-- Screen: Продажи товаров -->
+    <div class="page-body d-none" id="screen-sales">
+      <div class="container-xl">
+
+        <!-- Фильтры + кнопка добавить -->
+        <div class="card mb-3">
+          <div class="card-body py-2">
+            <div class="row g-2 align-items-end">
+              <div class="col-auto">
+                <label class="form-label small text-muted mb-1">Месяц</label>
+                <select class="form-select form-select-sm" id="sales-filter-month"
+                        onchange="loadProductSales()" style="min-width:140px">
+                  <option value="">Все месяцы</option>
+                  <option value="2026-05">Май 2026</option>
+                  <option value="2026-04" selected>Апрель 2026</option>
+                  <option value="2026-03">Март 2026</option>
+                  <option value="2026-02">Февраль 2026</option>
+                  <option value="2026-01">Январь 2026</option>
+                  <option value="2025-12">Декабрь 2025</option>
+                </select>
+              </div>
+              <div class="col-auto">
+                <label class="form-label small text-muted mb-1">Мастер</label>
+                <select class="form-select form-select-sm" id="sales-filter-staff"
+                        onchange="loadProductSales()" style="min-width:140px">
+                  <option value="">Все мастера</option>
+                  <option>Александра</option>
+                  <option>Анастасия</option>
+                  <option>Анна</option>
+                  <option>Екатерина</option>
+                  <option>Марина</option>
+                  <option>Мария</option>
+                  <option>Светлана</option>
+                  <option>София</option>
+                  <option>Татьяна</option>
+                </select>
+              </div>
+              <div class="col-auto ms-auto align-self-end">
+                <button class="btn btn-primary btn-sm" onclick="openAddSaleModal()">
+                  + Добавить продажу
+                </button>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Таблица P&L -->
+        <!-- Итоги по мастерам -->
+        <div id="sales-bonuses" class="row row-deck row-cards mb-3"></div>
+
+        <!-- Таблица продаж -->
         <div class="card">
           <div class="card-header">
-            <h3 class="card-title" id="pl-table-title">P&L по месяцам</h3>
-            <div class="card-options d-flex align-items-center gap-2">
-              <span class="badge bg-green-lt" id="pl-clean-badge">Очищено от личных расходов</span>
-              <select class="form-select form-select-sm" id="pl-project-select" onchange="onPLProjectChange()" style="width:auto">
-                <option value="salon" selected>✨ Салон (HeadSPA)</option>
-                <option value="podcast">🎙 Подкаст (NOISHA)</option>
-                <option value="book">📖 Книга</option>
-                <option value="consulting">💼 Консалтинг</option>
-                <option value="startup">🚀 Стартап</option>
-                <option value="consolidated">🗂 Консолидированный</option>
-              </select>
+            <h3 class="card-title">Продажи товаров</h3>
+            <div class="card-options">
+              <span class="text-muted small" id="sales-total"></span>
             </div>
           </div>
           <div class="table-responsive">
             <table class="table table-vcenter card-table" style="font-size:13px">
-              <thead>
+              <thead class="table-light">
                 <tr>
-                  <th rowspan="2" style="vertical-align:middle;min-width:80px">Месяц</th>
-                  <th colspan="5" class="text-center text-green fw-bold" style="background:#d3f9d8;border-bottom:none;padding-bottom:4px">Выручка</th>
-                  <th colspan="7" class="text-center text-red fw-bold" style="background:#ffe0e0;border-bottom:none;padding-bottom:4px">Расходы</th>
-                  <th rowspan="2" class="text-end fw-bold" style="vertical-align:middle;background:#e8f4fd;min-width:80px">EBITDA</th>
-                </tr>
-                <tr>
-                  <th class="text-end" style="background:#f0fdf4">Услуги</th>
-                  <th class="text-end" style="background:#f0fdf4">Сертиф.</th>
-                  <th class="text-end" style="background:#f0fdf4">Абон.</th>
-                  <th class="text-end" style="background:#f0fdf4">Fitmost</th>
-                  <th class="text-end fw-bold" style="background:#d3f9d8">Итого</th>
-                  <th class="text-end" style="background:#fff5f5">ФОТ</th>
-                  <th class="text-end" style="background:#fff5f5">Аренда</th>
-                  <th class="text-end" style="background:#fff5f5">Космет.</th>
-                  <th class="text-end" style="background:#fff5f5">Матер.</th>
-                  <th class="text-end" style="background:#fff5f5">Маркет.</th>
-                  <th class="text-end" style="background:#fff5f5">Банк</th>
-                  <th class="text-end fw-bold" style="background:#ffe0e0">Итого</th>
+                  <th>Дата</th>
+                  <th>Мастер</th>
+                  <th>Товар</th>
+                  <th class="text-center">Кол-во</th>
+                  <th>Оплата</th>
+                  <th class="text-end">Сумма</th>
+                  <th class="text-end text-green">Бонус 10%</th>
+                  <th>Примечание</th>
+                  <th></th>
                 </tr>
               </thead>
-              <tbody id="pl-tbody">
-                <tr><td colspan="14" class="text-center text-muted py-4">Загрузка...</td></tr>
+              <tbody id="sales-tbody">
+                <tr><td colspan="9" class="text-center text-muted py-4">Загрузка...</td></tr>
               </tbody>
             </table>
           </div>
         </div>
 
       </div>
-    </div>
+    </div><!-- /screen-sales -->
 
     <!-- Screen 3: Сотрудники -->
     <div class="page-body d-none" id="screen-staff">
@@ -835,6 +1184,7 @@
 <script src="js/router.js"></script>
 <script src="js/pulse.js"></script>
 <script src="js/pl.js"></script>
+<script src="js/sales.js"></script>
 <script src="js/staff.js"></script>
 <script src="js/schedule.js"></script>
 <script src="js/payroll.js"></script>

@@ -249,3 +249,14 @@ async def sync_all(background_tasks: BackgroundTasks):
     background_tasks.add_task(sync_transactions_data, COMPANY_ID, token)
 
     return {"status": "started", "message": "Полная синхронизация запущена"}
+
+@router.get(
+    "/transactions-now",
+    summary="Синхронизация транзакций (синхронная)",
+)
+async def sync_transactions_now():
+    salon = await get_salon(COMPANY_ID)
+    if not salon:
+        return {"error": "Салон не найден"}
+    await sync_transactions_data(COMPANY_ID, salon["user_token"])
+    return {"status": "done"}

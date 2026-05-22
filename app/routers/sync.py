@@ -105,7 +105,10 @@ async def sync_transactions_data(company_id: int, user_token: str):
             if not items:
                 break
             all_transactions.extend(items)
-            print(f"[SYNC TRANSACTIONS] Страница {page}: получено {len(items)}")
+            total = data.get("meta", {}).get("total_count", 0) if isinstance(data.get("meta"), dict) else 0
+            print(f"[SYNC TRANSACTIONS] Страница {page}: получено {len(items)}, всего {total}")
+            if total and len(all_transactions) >= total:
+                break
             if len(items) < 100:
                 break
             page += 1

@@ -1901,6 +1901,428 @@ async def reconciliation_days(month: str):
         return {"error": str(e), "trace": traceback.format_exc()}
 
 
+
+# ── GET /analytics/personal-expenses ──────────────────────────
+@router.get("/personal-expenses", summary="Личные расходы по месяцам")
+async def personal_expenses(date_from: str = "2026-01-01"):
+    try:
+        from app.database import supabase
+        from collections import defaultdict
+
+        data = fetch_all(supabase, lambda: supabase.table("personal_transactions").select(
+            "date, amount, expense_category, description"
+        ).eq("company_id", COMPANY_ID).eq("project", "personal").lt("amount", 0).gte("date", date_from).order("date"))
+
+        CATEGORY_LABELS = {
+            "food":        "🍽️ Еда",
+            "transport":   "🚗 Транспорт",
+            "rent":        "🏠 Аренда",
+            "health":      "💊 Здоровье",
+            "clothes":     "👕 Одежда",
+            "entertainment":"🎭 Развлечения",
+            "travel":      "✈️ Путешествия",
+            "education":   "📚 Образование",
+            "credit_card": "💳 Кредит",
+            "other":       "📦 Прочее",
+            "personal":    "👤 Личное",
+            "internal":    "🔄 Внутренние",
+        }
+
+        # Группируем по месяцу и категории
+        by_month = defaultdict(lambda: defaultdict(float))
+        all_cats = set()
+        for r in data:
+            m   = r["date"][:7]
+            cat = r.get("expense_category") or "other"
+            amt = abs(float(r["amount"] or 0))
+            by_month[m][cat] += amt
+            all_cats.add(cat)
+
+        all_months = sorted(by_month.keys())
+        all_cats   = sorted(all_cats)
+
+        months = []
+        for m in reversed(all_months):
+            cats = {}
+            total = 0.0
+            for cat in all_cats:
+                amt = round(by_month[m].get(cat, 0))
+                cats[cat] = amt
+                total += amt
+            months.append({
+                "month":      m,
+                "categories": cats,
+                "total":      round(total),
+            })
+
+        grand_total = sum(m["total"] for m in months)
+
+        return {
+            "months":      months,
+            "categories":  all_cats,
+            "cat_labels":  CATEGORY_LABELS,
+            "grand_total": round(grand_total),
+        }
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "trace": traceback.format_exc()}
+
+# ── GET /analytics/personal-expenses-detail ───────────────────
+@router.get("/personal-expenses-detail", summary="Детализация личных расходов")
+async def personal_expenses_detail(month: str, category: str):
+    try:
+        from app.database import supabase
+        import calendar as _cal
+
+        y, m_int  = map(int, month.split("-"))
+        last_day  = _cal.monthrange(y, m_int)[1]
+        date_from = f"{month}-01"
+        date_to   = f"{month}-{last_day:02d}T23:59:59"
+
+        q = supabase.table("personal_transactions").select(
+            "date, amount, expense_category, description"
+        ).eq("company_id", COMPANY_ID).eq("project", "personal").lt("amount", 0).gte("date", date_from).lte("date", date_to)
+
+        if category != "__all__":
+            q = q.eq("expense_category", category)
+
+        result = q.order("date", desc=True).execute()
+
+        rows = []
+        total = 0.0
+        for r in result.data:
+            amt = abs(float(r["amount"] or 0))
+            total += amt
+            rows.append({
+                "date":        r["date"][:10],
+                "description": (r.get("description") or "")[:100],
+                "category":    r.get("expense_category") or "other",
+                "amount":      round(amt),
+            })
+
+        return {"month": month, "category": category, "rows": rows, "total": round(total)}
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "trace": traceback.format_exc()}
+
+
+# ── POST /analytics/personal-expenses-categorize ──────────────
+@router.post("/personal-expenses-categorize", summary="Авторазметка личных расходов")
+async def personal_expenses_categorize(date_from: str = "2026-01-01"):
+    try:
+        from app.database import supabase
+
+        RULES = [
+            # (ключевое слово, категория)
+            ("яндекс аренда",        "rent"),
+            ("досрочное погашение",   "credit_card"),
+            ("беговое сообщество",    "sport"),
+            ("яхонты",               "sport"),
+            ("московский метрополитен", "transport"),
+            ("московский транспорт",  "transport"),
+            ("бери заряд",           "transport"),
+            ("портал госуслуг",      "government"),
+            ("mos.ru",               "government"),
+            ("мпц кассы",            "government"),
+            ("читай-город",          "education"),
+            ("t2",                   "phone"),
+            ("powerapp",             "subscriptions"),
+            ("подписка",             "subscriptions"),
+            ("магнит",               "food"),
+            ("вкусвилл",             "food"),
+            ("перекрёсток",          "food"),
+            ("лента",                "food"),
+            ("яндекс лавка",         "food"),
+            ("яндекс доставка",      "food"),
+            ("вкусно",               "food"),
+            ("теремок",              "food"),
+            ("farsh",                "food"),
+            ("farш",                 "food"),
+            ("лепим и варим",        "food"),
+            ("пельменная",           "food"),
+            ("шоко",                 "food"),
+            ("ресторан",             "food"),
+            ("mimi",                 "food"),
+            ("remy",                 "food"),
+            ("fast coffee",          "food"),
+            ("сберчаевые",           "food"),
+            ("klich",                "food"),
+            ("новодевичий",          "food"),
+            ("h-406",                "food"),
+            ("ozon",                 "shopping"),
+            ("яндекс маркет",        "shopping"),
+            ("wildberries",          "shopping"),
+            ("wb",                   "shopping"),
+        ]
+
+        data = supabase.table("personal_transactions").select(
+            "id, description, expense_category"
+        ).eq("company_id", COMPANY_ID).eq("project", "personal").lt("amount", 0).gte("date", date_from).execute()
+
+        updated = 0
+        skipped = 0
+        for r in data.data:
+            desc = (r.get("description") or "").lower()
+            matched = None
+            for keyword, category in RULES:
+                if keyword.lower() in desc:
+                    matched = category
+                    break
+            if matched and matched != r.get("expense_category"):
+                supabase.table("personal_transactions").update(
+                    {"expense_category": matched}
+                ).eq("id", r["id"]).execute()
+                updated += 1
+            else:
+                skipped += 1
+
+        return {"ok": True, "updated": updated, "skipped": skipped}
+
+    except Exception as e:
+        import traceback
+        return {"ok": False, "error": str(e), "trace": traceback.format_exc()}
+
+
+# ── GET /analytics/obligations-fact ───────────────────────────
+@router.get("/obligations-fact", summary="Обязательства: план vs факт")
+async def obligations_fact(year: int, month: int):
+    try:
+        from app.database import supabase
+        import calendar as _cal
+        import re as _re
+
+        last_day  = _cal.monthrange(year, month)[1]
+        date_to   = f"{year}-{month:02d}-{last_day:02d}T23:59:59"
+        # Расширяем поиск на 5 дней назад — платежи могут приходить в конце предыдущего месяца
+        from datetime import date as _dt, timedelta as _td
+        date_from_ext = (_dt(year, month, 1) - _td(days=5)).isoformat()
+        date_from     = f"{year}-{month:02d}-01"
+
+        # Все активные обязательства с match_rule
+        obs = supabase.table("obligations").select("*").eq(
+            "company_id", COMPANY_ID).eq("is_active", True).not_.is_("match_rule", "null").execute()
+
+        # Банковские транзакции за месяц + 5 дней предыдущего
+        bank = supabase.table("bank_transactions").select(
+            "id, date, amount, description, counterparty"
+        ).eq("company_id", COMPANY_ID).gte("date", date_from_ext).lte("date", date_to).lt("amount", 0).execute()
+
+        # Личные транзакции за месяц + 5 дней предыдущего
+        personal = supabase.table("personal_transactions").select(
+            "id, date, amount, description"
+        ).eq("company_id", COMPANY_ID).gte("date", date_from_ext).lte("date", date_to).lt("amount", 0).execute()
+
+        result = []
+        for o in obs.data:
+            rule    = o.get("match_rule") or ""
+            source  = o.get("match_source") or "bank"
+            pattern = _re.compile(rule, _re.IGNORECASE)
+
+            matched_txs = []
+
+            amt_min = float(o.get("match_amount_min") or 0)
+            amt_max = float(o.get("match_amount_max") or 999999999)
+
+            if source in ("bank", "both"):
+                for t in bank.data:
+                    text = f"{t.get('description','')} {t.get('counterparty','')}".lower()
+                    amt  = abs(float(t["amount"] or 0))
+                    if pattern.search(text) and amt_min <= amt <= amt_max:
+                        matched_txs.append({
+                            "source":  "bank",
+                            "date":    t["date"][:10],
+                            "amount":  round(amt),
+                            "description": (t.get("description") or "")[:80],
+                        })
+
+            if source in ("personal", "both"):
+                for t in personal.data:
+                    text = (t.get("description") or "").lower()
+                    amt  = abs(float(t["amount"] or 0))
+                    if pattern.search(text) and amt_min <= amt <= amt_max:
+                        matched_txs.append({
+                            "source":  "personal",
+                            "date":    t["date"][:10],
+                            "amount":  round(amt),
+                            "description": (t.get("description") or "")[:80],
+                        })
+
+            fact_total = sum(t["amount"] for t in matched_txs)
+            plan       = float(o["amount"] or 0)
+            diff       = fact_total - plan
+
+            result.append({
+                "id":          o["id"],
+                "description": o["description"],
+                "project":     o["project"],
+                "type":        o["type"],
+                "day_of_month": o.get("day_of_month"),
+                "plan":        round(plan),
+                "fact":        round(fact_total),
+                "diff":        round(diff),
+                "ok":          abs(diff) < plan * 0.05 + 500,
+                "transactions": matched_txs,
+                "match_rule":  rule,
+                "match_source": source,
+            })
+
+        # Сортируем по дню месяца
+        result.sort(key=lambda x: x["day_of_month"] or 99)
+
+        total_plan = sum(r["plan"] for r in result)
+        total_fact = sum(r["fact"] for r in result)
+
+        return {
+            "month":      f"{year}-{month:02d}",
+            "obligations": result,
+            "total_plan": round(total_plan),
+            "total_fact": round(total_fact),
+            "total_diff": round(total_fact - total_plan),
+        }
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "trace": traceback.format_exc()}
+
+
+# ── GET /analytics/self-transfers ────────────────────────────
+@router.get("/self-transfers", summary="Переводы себе по месяцам")
+async def self_transfers(date_from: str = "2026-01-01"):
+    try:
+        from app.database import supabase
+        from collections import defaultdict
+
+        # Исходные переводы себе
+        data = fetch_all(supabase, lambda: supabase.table("personal_transactions").select(
+            "id, date, amount, description, expense_category, card"
+        ).eq("company_id", COMPANY_ID).eq("description", "Дмитрий В.").eq(
+            "card", "*4531"
+        ).lt("amount", 0).gte("date", date_from).order("date"))
+
+        # Уже размеченные записи
+        marked = fetch_all(supabase, lambda: supabase.table("personal_transactions").select(
+            "date, amount"
+        ).eq("company_id", COMPANY_ID).eq(
+            "category", "Переводы себе (разметка)"
+        ).eq("project", "personal").lt("amount", 0).gte("date", date_from))
+
+        # Сумма размеченного по месяцам
+        marked_by_month = defaultdict(float)
+        for r in marked:
+            m = r["date"][:7]
+            marked_by_month[m] += abs(float(r["amount"] or 0))
+
+        by_month = defaultdict(list)
+        for r in data:
+            m   = r["date"][:7]
+            amt = round(abs(float(r["amount"] or 0)))
+            by_month[m].append({
+                "id":      r["id"],
+                "date":    r["date"][:10],
+                "amount":  amt,
+                "purpose": r.get("expense_category") or "",
+            })
+
+        # Детализация разметки по месяцам
+        marked_detail = fetch_all(supabase, lambda: supabase.table("personal_transactions").select(
+            "id, date, amount, description, expense_category"
+        ).eq("company_id", COMPANY_ID).eq(
+            "category", "Переводы себе (разметка)"
+        ).eq("project", "personal").lt("amount", 0).gte("date", date_from))
+
+        marked_items_by_month = defaultdict(list)
+        for r in marked_detail:
+            m = r["date"][:7]
+            marked_items_by_month[m].append({
+                "id":     r["id"],
+                "desc":   r.get("description") or "",
+                "cat":    r.get("expense_category") or "",
+                "amount": round(abs(float(r["amount"] or 0))),
+            })
+
+        months = []
+        for m in sorted(by_month.keys(), reverse=True):
+            txs        = by_month[m]
+            total      = sum(t["amount"] for t in txs)
+            marked_amt = round(marked_by_month.get(m, 0))
+            remaining  = round(total - marked_amt)
+            months.append({
+                "month":        m,
+                "total":        round(total),
+                "count":        len(txs),
+                "marked":       marked_amt,
+                "remaining":    remaining,
+                "done":         remaining <= 0,
+                "transactions": txs,
+                "breakdown":    marked_items_by_month.get(m, []),
+            })
+
+        return {"months": months}
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "trace": traceback.format_exc()}
+
+
+# ── POST /analytics/obligation-payment ────────────────────────
+@router.post("/obligation-payment", summary="Добавить платёж по обязательству")
+async def add_obligation_payment(body: dict = Body(...)):
+    try:
+        from app.database import supabase
+        result = supabase.table("obligation_payments").insert({
+            "company_id":    COMPANY_ID,
+            "obligation_id": body["obligation_id"],
+            "amount":        body["amount"],
+            "payment_date":  body["payment_date"],
+            "notes":         body.get("notes", ""),
+            "source":        body.get("source", "manual"),
+        }).execute()
+        return {"ok": True, "payment": result.data[0] if result.data else {}}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+# ── POST /analytics/self-transfer-breakdown ───────────────────
+@router.post("/self-transfer-breakdown", summary="Разметка перевода себе")
+async def self_transfer_breakdown(body: dict = Body(...)):
+    try:
+        from app.database import supabase
+        import calendar as _cal
+
+        month = body["month"]  # "2026-05"
+        items = body["items"]  # [{amount, desc, cat}, ...]
+        y, m  = map(int, month.split("-"))
+        last_day = _cal.monthrange(y, m)[1]
+
+        rows = []
+        for item in items:
+            amt  = float(item["amount"] or 0)
+            desc = item.get("desc") or ""
+            cat  = item.get("cat") or "other"
+            if amt <= 0:
+                continue
+            rows.append({
+                "company_id":       COMPANY_ID,
+                "date":             f"{month}-{last_day:02d}",
+                "amount":           -amt,
+                "description":      desc,
+                "expense_category": cat,
+                "project":          "personal",
+                "category":         "Переводы себе (разметка)",
+            })
+
+        if rows:
+            supabase.table("personal_transactions").insert(rows).execute()
+
+        return {"ok": True, "created": len(rows)}
+
+    except Exception as e:
+        import traceback
+        return {"ok": False, "error": str(e), "trace": traceback.format_exc()}
+
+
 # ══════════════════════════════════════════════════════════════
 # ПРОДАЖИ ТОВАРОВ
 # ══════════════════════════════════════════════════════════════
@@ -1909,6 +2331,22 @@ STAFF_LIST = [
     "Александра", "Анастасия", "Анна", "Екатерина",
     "Марина", "Мария", "Светлана", "София", "Татьяна"
 ]
+
+# ── DELETE /analytics/transactions/{tx_id} ────────────────────
+@router.delete("/transactions/{tx_id}", summary="Удалить запись разметки перевода")
+async def delete_transaction(tx_id: int):
+    try:
+        from app.database import supabase
+        # Удаляем только записи разметки переводов себе
+        result = supabase.table("personal_transactions").delete().eq(
+            "id", tx_id
+        ).eq("company_id", COMPANY_ID).eq(
+            "category", "Переводы себе (разметка)"
+        ).execute()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
 
 @router.get("/products", summary="Справочник товаров")
 async def get_products():

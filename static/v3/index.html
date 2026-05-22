@@ -388,6 +388,13 @@
               </li>
               <li class="nav-item">
                 <a class="nav-link" href="javascript:void(0)"
+                   data-pl-tab="personal" onclick="showPLTab('personal')"
+                   style="padding:0.5rem 0.75rem;white-space:nowrap">
+                  🏠 Личные расходы
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="javascript:void(0)"
                    data-pl-tab="transactions" onclick="showPLTab('transactions')"
                    style="padding:0.5rem 0.75rem;white-space:nowrap">
                   🔍 Транзакции
@@ -500,6 +507,46 @@
  
         </div><!-- /pl-tab-pl -->
  
+        <!-- ══ ТАБ: Личные расходы ══════════════════════════════ -->
+        <div id="pl-tab-personal" data-pl-tab-content class="d-none">
+          <div class="card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+              <h3 class="card-title mb-0">🏠 Личные расходы — с января 2026</h3>
+              <span class="text-muted small" id="personal-grand-total"></span>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-vcenter table-sm card-table" style="font-size:13px" id="personal-table">
+                <thead class="table-light" id="personal-thead"></thead>
+                <tbody id="personal-tbody">
+                  <tr><td class="text-center text-muted py-4">Загрузка...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <!-- Переводы себе -->
+          <div class="card mt-3">
+            <div class="card-header">
+              <h3 class="card-title mb-0">💸 Переводы себе — для разметки</h3>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-vcenter table-sm card-table" style="font-size:13px">
+                <thead class="table-light">
+                  <tr>
+                    <th>Месяц</th>
+                    <th class="text-end">Переводов</th>
+                    <th class="text-end">Сумма</th>
+                    <th class="text-end">Статус</th>
+                  </tr>
+                </thead>
+                <tbody id="self-transfers-tbody">
+                  <tr><td colspan="3" class="text-center text-muted py-3">Загрузка...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div><!-- /pl-tab-personal -->
+
         <!-- ══ ТАБ: Транзакции ════════════════════════════════════ -->
         <div id="pl-tab-transactions" data-pl-tab-content class="d-none">
  

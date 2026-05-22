@@ -137,15 +137,19 @@ class ShiftAdd(BaseModel):
 async def add_shift(data: ShiftAdd):
     """Добавить смену или выход под запись в расписание"""
     # Проверяем дубль
-    existing = supabase.table("shifts").select("id").eq(
-        "company_id", COMPANY_ID
-    ).eq("date", data.date).eq("staff_name", data.staff_name).execute()
-    if existing.data:
-        record_id = existing.data[0]["id"]
-        # Обновляем shift_pay если передан
-        if data.shift_pay > 0:
-            supabase.table("shifts").update({"shift_pay": data.shift_pay}).eq("id", record_id).execute()
-        return {"status": "exists", "id": record_id}
+    # Для выходов под запись (is_visit_only=True) допускаем несколько записей
+    # одного мастера в день — каждая парная программа = отдельный выход
+    if not data.is_visit_only:
+        existing = supabase.table("shifts").select("id").eq(
+            "company_id", COMPANY_ID
+        ).eq("date", data.date).eq("staff_name", data.staff_name).eq(
+            "is_visit_only", False
+        ).execute()
+        if existing.data:
+            record_id = existing.data[0]["id"]
+            if data.shift_pay > 0:
+                supabase.table("shifts").update({"shift_pay": data.shift_pay}).eq("id", record_id).execute()
+            return {"status": "exists", "id": record_id}
 
     result = supabase.table("shifts").insert({
         "company_id": COMPANY_ID,

@@ -260,3 +260,18 @@ async def sync_transactions_now():
         return {"error": "Салон не найден"}
     await sync_transactions_data(COMPANY_ID, salon["user_token"])
     return {"status": "done"}
+
+@router.get("/transactions-debug", summary="Диагностика транзакций из YCLIENTS")
+async def transactions_debug(date_from: str = "2026-05-19", date_to: str = "2026-05-21"):
+    salon = await get_salon(COMPANY_ID)
+    if not salon:
+        return {"error": "Салон не найден"}
+    from app.yclients import get_transactions
+    data = await get_transactions(
+        company_id=COMPANY_ID,
+        user_token=salon["user_token"],
+        start_date=date_from,
+        end_date=date_to,
+        page=1
+    )
+    return {"raw": data}

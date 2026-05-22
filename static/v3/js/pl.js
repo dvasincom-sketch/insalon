@@ -237,6 +237,10 @@ function showPLTab(tab) {
   if (tab === 'transactions') {
     loadTransactions();
   }
+  if (tab === 'personal') {
+    loadPersonalExpenses();
+    loadSelfTransfers();
+  }
   if (tab === 'reconciliation') {
     loadReconciliation();
   }
@@ -403,6 +407,315 @@ function resetTxFilters() {
   ['tx-filter-month', 'tx-filter-source', 'tx-filter-category', 'tx-filter-project']
     .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   loadTransactions();
+}
+
+
+// ══ Личные расходы ══════════════════════════════════════════
+async function loadSelfTransfers() {
+  const tbody = document.getElementById('self-transfers-tbody');
+  if (!tbody) return;
+
+  const data = await fetchData('/analytics/self-transfers?date_from=2026-01-01');
+  if (!data || data.error) {
+    tbody.innerHTML = '<tr><td colspan="3" class="text-danger text-center py-3">Ошибка загрузки</td></tr>';
+    return;
+  }
+  if (!data.months || !data.months.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="text-muted text-center py-3">Нет данных</td></tr>';
+    return;
+  }
+
+  // Показываем только месяцы где есть неразмеченные переводы
+  const pending = data.months.filter(m => !m.done);
+  const done    = data.months.filter(m => m.done);
+
+  if (!pending.length && !done.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Нет данных</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = [
+    ...pending.map(m => {
+      const txData = JSON.stringify(m.transactions).replace(/"/g, '&quot;');
+      const bdData = JSON.stringify(m.breakdown || []).replace(/"/g, '&quot;');
+      return `<tr style="cursor:pointer" onclick="showSelfTransferDetail(${txData}, '${m.month}', ${m.total}, ${m.marked || 0}, ${bdData})">
+        <td class="fw-bold">${m.month}</td>
+        <td class="text-end text-muted">${m.count}</td>
+        <td class="text-end">${formatK(m.total)}</td>
+        <td class="text-end">
+          ${m.marked ? `<span class="text-green small">✓ ${formatK(m.marked)}</span> ` : ''}
+          <span class="badge bg-orange-lt">⚠️ ${formatK(m.remaining)}</span>
+        </td>
+      </tr>`;
+    }),
+    ...done.map(m => {
+      const txData = JSON.stringify(m.transactions).replace(/"/g, '&quot;');
+      const bdData2 = JSON.stringify(m.breakdown || []).replace(/"/g, '&quot;');
+      return `<tr class="text-muted" style="cursor:pointer" onclick="showSelfTransferDetail(${txData}, '${m.month}', ${m.total}, ${m.marked || 0}, ${bdData2})">
+        <td>${m.month}</td>
+        <td class="text-end">${m.count}</td>
+        <td class="text-end">${formatK(m.total)}</td>
+        <td class="text-end"><span class="badge bg-green-lt">✅ размечено</span></td>
+      </tr>`;
+    }),
+  ].join('');
+}
+
+function showSelfTransferDetail(txs, month, monthTotal, alreadyMarked, breakdown) {
+  const total    = monthTotal || txs.reduce((s, t) => s + t.amount, 0);
+  const marked   = alreadyMarked || 0;
+  const bdItems  = breakdown || [];
+  const modalEl = document.getElementById('pl-detail-modal');
+  if (!modalEl) return;
+  document.getElementById('pl-detail-title').textContent = `Переводы себе — ${month}`;
+
+  const rows = txs.map(t => `
+    <tr>
+      <td class="small text-muted">${t.date}</td>
+      <td class="text-end fw-bold">${formatMoney(t.amount)}</td>
+      <td><select class="form-select form-select-sm" style="min-width:150px;font-size:12px"
+            onchange="saveSelfTransferPurpose(${t.id}, this.value)">
+        <option value="">— не размечено —</option>
+        <option value="credit_sber"${t.purpose==='credit_sber'?' selected':''}>💳 Кредит Сбер</option>
+        <option value="rent"${t.purpose==='rent'?' selected':''}>🏠 Аренда</option>
+        <option value="subscriptions"${t.purpose==='subscriptions'?' selected':''}>📱 Подписки</option>
+        <option value="transfers"${t.purpose==='transfers'?' selected':''}>👤 Перевод другому</option>
+        <option value="internal"${t.purpose==='internal'?' selected':''}>🔄 Внутренний</option>
+        <option value="other"${t.purpose==='other'?' selected':''}>📦 Прочее</option>
+      </select></td>
+    </tr>`).join('');
+
+  const totalAmt = txs.reduce((s, t) => s + t.amount, 0);
+  document.getElementById('pl-detail-body').innerHTML = `
+    <table class="table table-vcenter table-sm">
+      <thead><tr><th>Дата</th><th class="text-end">Сумма</th><th>Назначение</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr class="fw-bold">
+        <td class="text-end">Итого:</td>
+        <td class="text-end">${formatMoney(total)}</td><td></td>
+      </tr></tfoot>
+    </table>
+    <div class="card mt-3">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="fw-bold text-muted small">Разбивка за месяц — итого: <b>${formatMoney(total)}</b></span>
+          <span class="small" id="st-remainder">Не размечено: <b class="${marked >= total ? 'text-green' : 'text-orange'}">${formatMoney(Math.max(0, total - marked))}</b>${marked > 0 ? ' <span class=\"text-green small\">(✓ ' + formatMoney(marked) + ' размечено)</span>' : ''}</span>
+        </div>
+        ${bdItems.length ? `
+        <div class="mb-3 p-2 bg-light rounded">
+          <div class="small fw-bold text-muted mb-1">Уже размечено:</div>
+          ${bdItems.map(b => `
+            <div class="d-flex justify-content-between small py-1 border-bottom align-items-center">
+              <span>${b.desc} <span class="badge bg-secondary-lt">${b.cat}</span></span>
+              <div class="d-flex align-items-center gap-2">
+                <span class="fw-bold">${formatMoney(b.amount)}</span>
+                <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:11px"
+                  onclick="deleteBreakdownItem(${b.id}, '${month}')">✕</button>
+              </div>
+            </div>`).join('')}
+        </div>` : ''}
+        <div id="st-rows"></div>
+        <button class="btn btn-sm btn-outline-secondary mt-2" onclick="stAddRow(${total})">+ Добавить строку</button>
+        <div class="mt-3">
+          <button class="btn btn-sm btn-primary" onclick="saveSelfTransferMonth('${month}', ${total})">
+            Сохранить разбивку
+          </button>
+          <span class="small text-muted ms-2" id="st-save-status"></span>
+        </div>
+      </div>
+    </div>`;
+  modalEl.style.display = 'flex';
+}
+
+let stTotal = 0;
+
+function stAddRow(total) {
+  stTotal = total;
+  const container = document.getElementById('st-rows');
+  const idx = container.children.length;
+  const row = document.createElement('div');
+  row.className = 'row g-2 align-items-center mb-2';
+  row.innerHTML = `
+    <div class="col-auto">
+      <input type="number" class="form-control form-control-sm st-amount" 
+             placeholder="Сумма" style="width:120px" oninput="stUpdateRemainder(${total})">
+    </div>
+    <div class="col">
+      <input type="text" class="form-control form-control-sm st-desc" 
+             placeholder="Описание (напр. Кредит Сбер, Claude Pro...)">
+    </div>
+    <div class="col-auto">
+      <select class="form-select form-select-sm st-cat" style="min-width:130px;font-size:12px">
+        <option value="credit">💳 Кредит</option>
+        <option value="rent">🏠 Аренда</option>
+        <option value="subscriptions">📱 Подписки</option>
+        <option value="shopping">🛍️ Покупки</option>
+        <option value="food">🍽️ Еда</option>
+        <option value="sport">🏃 Спорт</option>
+        <option value="government">🏛️ Госуслуги</option>
+        <option value="transfers">👤 Перевод</option>
+        <option value="other">📦 Прочее</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-sm btn-outline-danger" onclick="this.closest('.row').remove(); stUpdateRemainder(${total})">✕</button>
+    </div>`;
+  container.appendChild(row);
+  stUpdateRemainder(total);
+}
+
+function stUpdateRemainder(total) {
+  const amounts = [...document.querySelectorAll('.st-amount')]
+    .map(el => parseFloat(el.value || 0));
+  const used = amounts.reduce((s, a) => s + a, 0);
+  const rem  = total - used;
+  const el   = document.getElementById('st-remainder');
+  if (el) el.innerHTML = `Не размечено: <b class="${rem > 0.01 ? 'text-orange' : 'text-green'}">${formatMoney(rem)}</b>`;
+}
+
+async function deleteBreakdownItem(id, month) {
+  const res  = await fetch(`/analytics/transactions/${id}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (data.ok) {
+    loadSelfTransfers();
+    loadPersonalExpenses();
+    closePLDetail();
+  } else {
+    console.error('Ошибка удаления:', data.error);
+  }
+}
+
+async function saveSelfTransferMonth(month, total) {
+  const status = document.getElementById('st-save-status');
+  const rows   = [...document.querySelectorAll('#st-rows .row')];
+
+  if (!rows.length) {
+    if (status) status.innerHTML = '<span class="text-orange">Добавьте хотя бы одну строку</span>';
+    return;
+  }
+
+  const items = rows.map(row => ({
+    amount: parseFloat(row.querySelector('.st-amount').value || 0),
+    desc:   row.querySelector('.st-desc').value.trim(),
+    cat:    row.querySelector('.st-cat').value,
+  })).filter(r => r.amount > 0);
+
+  if (!items.length) {
+    if (status) status.innerHTML = '<span class="text-orange">Укажите суммы</span>';
+    return;
+  }
+
+  if (status) status.innerHTML = '<span class="text-muted">Сохраняю...</span>';
+
+  const res = await fetch('/analytics/self-transfer-breakdown', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ month, items }),
+  });
+  const data = await res.json();
+
+  if (data.ok) {
+    if (status) status.innerHTML = `<span class="text-green">✓ Сохранено ${items.length} строк</span>`;
+    loadPersonalExpenses();
+    loadSelfTransfers();
+  } else {
+    if (status) status.innerHTML = `<span class="text-danger">Ошибка: ${data.error}</span>`;
+  }
+}
+
+async function saveSelfTransferPurpose(id, value) {
+  await fetch(`/analytics/transactions/${id}`, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({source: 'personal', expense_category: value}),
+  });
+}
+
+async function loadPersonalExpenses() {
+  const tbodyEl = document.getElementById('personal-tbody');
+  const theadEl = document.getElementById('personal-thead');
+  const totalEl = document.getElementById('personal-grand-total');
+  if (!tbodyEl) return;
+
+  tbodyEl.innerHTML = '<tr><td colspan="20" class="text-center text-muted py-4">Загрузка...</td></tr>';
+
+  const data = await fetchData('/analytics/personal-expenses?date_from=2026-01-01');
+  if (!data || data.error) {
+    tbodyEl.innerHTML = '<tr><td class="text-danger py-3 text-center">Ошибка загрузки</td></tr>';
+    return;
+  }
+
+  const cats   = data.categories || [];
+  const labels = data.cat_labels || {};
+  const months = data.months || [];
+
+  // Thead
+  theadEl.innerHTML = '<tr>'
+    + '<th>Месяц</th>'
+    + cats.map(c => `<th class="text-end" style="white-space:nowrap">${labels[c] || c}</th>`).join('')
+    + '<th class="text-end fw-bold">Итого</th>'
+    + '</tr>';
+
+  // Tbody — ячейки кликабельны
+  tbodyEl.innerHTML = months.map(m => {
+    const cells = cats.map(c => {
+      const amt = m.categories[c] || 0;
+      if (!amt) return `<td class="text-end text-muted">—</td>`;
+      return `<td class="text-end" style="cursor:pointer;text-decoration:underline dotted"
+                title="Детализация" onclick="showPersonalDetail('${m.month}','${c}')">${formatK(amt)}</td>`;
+    }).join('');
+    return `<tr>
+      <td class="fw-bold">${m.month}</td>
+      ${cells}
+      <td class="text-end fw-bold" style="cursor:pointer;text-decoration:underline dotted"
+          onclick="showPersonalDetail('${m.month}','__all__')">${formatK(m.total)}</td>
+    </tr>`;
+  }).join('');
+
+  if (totalEl) {
+    totalEl.textContent = 'Итого за период: ' + formatK(data.grand_total);
+  }
+}
+
+
+async function showPersonalDetail(month, category) {
+  const modalEl = document.getElementById('pl-detail-modal');
+  if (!modalEl) return;
+  const label = category === '__all__' ? 'Все категории' : category;
+  document.getElementById('pl-detail-title').textContent = `Личные расходы — ${month} — ${label}`;
+  document.getElementById('pl-detail-body').innerHTML = '<div class="text-center text-muted py-3">Загрузка...</div>';
+  modalEl.style.display = 'flex';
+
+  const data = await fetchData(`/analytics/personal-expenses-detail?month=${month}&category=${category}`);
+  if (!data || data.error) {
+    document.getElementById('pl-detail-body').innerHTML = '<div class="text-danger py-3">Ошибка загрузки</div>';
+    return;
+  }
+  if (!data.rows || !data.rows.length) {
+    document.getElementById('pl-detail-body').innerHTML = '<div class="text-muted py-3 text-center">Нет транзакций</div>';
+    return;
+  }
+  const rows = data.rows.map(r => `
+    <tr>
+      <td class="small text-muted" style="white-space:nowrap">${r.date}</td>
+      <td class="small text-muted">${r.category}</td>
+      <td class="small">${r.description || '—'}</td>
+      <td class="text-end fw-bold">${formatMoney(r.amount)}</td>
+    </tr>`).join('');
+  document.getElementById('pl-detail-body').innerHTML = `
+    <table class="table table-vcenter table-sm">
+      <thead><tr>
+        <th style="width:90px">Дата</th>
+        <th style="width:100px">Категория</th>
+        <th>Описание</th>
+        <th class="text-end">Сумма</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr class="fw-bold">
+        <td colspan="3" class="text-end">Итого:</td>
+        <td class="text-end">${formatMoney(data.total)}</td>
+      </tr></tfoot>
+    </table>`;
 }
 
 // ============ RECONCILIATION TAB ============

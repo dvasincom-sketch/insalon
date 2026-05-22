@@ -1,10 +1,8 @@
 name: Daily sync
-
 on:
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
-
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -13,3 +11,13 @@ jobs:
         run: curl -f "https://insalon.onrender.com/sync/recent"
       - name: Wait for background tasks
         run: sleep 60
+      - name: Sync future records (next 7 days)
+        run: |
+          FUTURE=$(date -u -d "+7 days" +%Y-%m-%d 2>/dev/null || date -u -v+7d +%Y-%m-%d)
+          TODAY=$(date -u +%Y-%m-%d)
+          curl -f "https://insalon.onrender.com/sync/records-now?date_from=$TODAY&date_to=$FUTURE"
+      - name: Sync transactions (last 14 days)
+        run: |
+          START=$(date -u -d "-14 days" +%Y-%m-%d 2>/dev/null || date -u -v-14d +%Y-%m-%d)
+          END=$(date -u -d "+7 days" +%Y-%m-%d 2>/dev/null || date -u -v+7d +%Y-%m-%d)
+          curl -f "https://insalon.onrender.com/sync/transactions-now"

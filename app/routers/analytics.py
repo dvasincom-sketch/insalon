@@ -199,7 +199,11 @@ async def analytics_pl(project: str = "salon"):
                 cat = e["expense_category"]
                 amount = abs(float(e["amount"] or 0))
                 if cat == "salary":
-                    pass  # берём из payroll
+                    monthly[month]["salary"] += amount
+                elif cat == "team":
+                    monthly[month]["other"] += amount
+                elif cat == "production":
+                    monthly[month]["materials"] += amount
                 elif cat in known_cats:
                     monthly[month][cat] += amount
                 else:
@@ -237,7 +241,11 @@ async def analytics_pl(project: str = "salon"):
                 cat = e["expense_category"]
                 amount = abs(float(e["amount"] or 0))
                 if cat == "salary":
-                    pass
+                    monthly[month]["salary"] += amount
+                elif cat == "team":
+                    monthly[month]["other"] += amount
+                elif cat == "production":
+                    monthly[month]["materials"] += amount
                 elif cat in known_cats:
                     monthly[month][cat] += amount
                 else:
@@ -249,11 +257,25 @@ async def analytics_pl(project: str = "salon"):
             else:
                 bank_exp = fetch_all(supabase, lambda: supabase.table("bank_transactions").select("date, amount, category").eq("company_id", COMPANY_ID).lt("amount", 0).not_.in_("project", CONSOLIDATED_EXCLUDE))
 
+            bank_known = {"salary", "marketing", "production", "team", "rent", "materials"}
             for b in bank_exp:
                 if project == "consolidated" and b.get("category") in ("bank_fee", "cosmetics", "salon_rent"):
                     continue  # уже добавлены выше
                 month = b["date"][:7]
-                monthly[month]["other"] += abs(float(b["amount"] or 0))
+                cat_b = b.get("category", "other")
+                amount_b = abs(float(b["amount"] or 0))
+                if cat_b == "salary":
+                    monthly[month]["salary"] += amount_b
+                elif cat_b == "team":
+                    monthly[month]["other"] += amount_b
+                elif cat_b == "production":
+                    monthly[month]["materials"] += amount_b
+                elif cat_b == "marketing":
+                    monthly[month]["marketing"] += amount_b
+                elif cat_b == "rent":
+                    monthly[month]["rent"] += amount_b
+                else:
+                    monthly[month]["other"] += amount_b
 
         return {
             "project": project,
@@ -935,7 +957,7 @@ async def get_payroll_schedule(year: int, month: int):
 
 
 @router.get("/pl-detail")
-async def pl_detail(month: str, category: str):
+async def pl_detail(month: str, category: str, project: str = "salon"):
     """Детализация P&L по месяцу и категории"""
     try:
         from app.database import supabase
@@ -946,25 +968,60 @@ async def pl_detail(month: str, category: str):
         date_to = f"{month}-{last_day}"
 
         if category == "salary":
-            # ФОТ из payroll
-            result = supabase.table("payroll").select(
-                "staff_name, period_start, period_end, shifts, shift_pay, visit_pay, bonus_loyalty, total_accrued, status"
-            ).eq("company_id", COMPANY_ID).gte(
-                "period_start", date_from
-            ).lte("period_start", date_to).order("staff_name").execute()
-            rows = [{"label": f"{p['staff_name']} ({p['period_start'][:7]} {p['period_start'][8:10]}–{p['period_end'][8:10]})",
-                     "detail": f"{p['shifts']} смен × 5000 + выходы {p['visit_pay']} + бонусы {p['bonus_loyalty']}",
-                     "amount": float(p["total_accrued"] or 0),
-                     "status": p["status"]} for p in result.data]
-            return {"category": "ФОТ", "month": month, "rows": rows,
-                    "total": sum(r["amount"] for r in rows)}
+            if project == "salon":
+                # ФОТ из payroll для салона
+                result = supabase.table("payroll").select(
+                    "staff_name, period_start, period_end, shifts, shift_pay, visit_pay, bonus_loyalty, total_accrued, status"
+                ).eq("company_id", COMPANY_ID).gte(
+                    "period_start", date_from
+                ).lte("period_start", date_to).order("staff_name").execute()
+                rows = [{"label": f"{p['staff_name']} ({p['period_start'][:7]} {p['period_start'][8:10]}–{p['period_end'][8:10]})",
+                         "detail": f"{p['shifts']} смен × 5000 + выходы {p['visit_pay']} + бонусы {p['bonus_loyalty']}",
+                         "amount": float(p["total_accrued"] or 0),
+                         "status": p["status"]} for p in result.data]
+                return {"category": "ФОТ", "month": month, "rows": rows,
+                        "total": sum(r["amount"] for r in rows)}
+            else:
+                # ФОТ из транзакций для других проектов
+                rows = []
+                for tbl, cat_field, amt_field, desc_field in [
+                    ("personal_transactions", "expense_category", "amount", "description"),
+                    ("bank_transactions", "category", "amount", "description"),
+                ]:
+                    res = supabase.table(tbl).select(f"date,{amt_field},{desc_field}").eq(
+                        "company_id", COMPANY_ID
+                    ).eq("project", project).eq(cat_field, "salary").gte(
+                        "date", date_from
+                    ).lte("date", date_to).lt(amt_field, 0).execute()
+                    for r in res.data:
+                        rows.append({
+                            "label": r.get(desc_field, "")[:50],
+                            "detail": tbl.replace("_transactions",""),
+                            "amount": abs(float(r[amt_field] or 0)),
+                            "date": r["date"][:10]
+                        })
+                return {"category": "ФОТ", "month": month, "rows": rows,
+                        "total": sum(r["amount"] for r in rows)}
 
         elif category in ("salon_rent", "rent", "marketing"):
-            result = supabase.table("bank_transactions").select(
-                "date, amount, description, counterparty, period, category"
-            ).eq("company_id", COMPANY_ID).eq(
-                "category", "salon_rent"
-            ).execute()
+            if project == "salon":
+                q = supabase.table("bank_transactions").select(
+                    "date, amount, description, counterparty, period, category"
+                ).eq("company_id", COMPANY_ID).eq("category", "salon_rent")
+            else:
+                q = supabase.table("bank_transactions").select(
+                    "date, amount, description, counterparty, period, category"
+                ).eq("company_id", COMPANY_ID).eq("project", project).eq("category", category).gte("date", date_from).lte("date", date_to)
+                q2 = supabase.table("personal_transactions").select(
+                    "date, amount, description"
+                ).eq("company_id", COMPANY_ID).eq("project", project).eq("expense_category", category).gte("date", date_from).lte("date", date_to).lt("amount", 0)
+                rows = []
+                for t in q.execute().data:
+                    rows.append({"label": t.get("counterparty") or t["description"][:50], "detail": t["description"][:100], "amount": abs(float(t["amount"] or 0)), "date": t["date"][:10]})
+                for t in q2.execute().data:
+                    rows.append({"label": t["description"][:50], "detail": "personal", "amount": abs(float(t["amount"] or 0)), "date": t["date"][:10]})
+                return {"category": category, "month": month, "rows": rows, "total": sum(r["amount"] for r in rows)}
+            result = q.execute()
             rows = []
             for t in result.data:
                 period = (t.get("period") or t["date"])[:7]
@@ -1005,6 +1062,34 @@ async def pl_detail(month: str, category: str):
             rows = [{"label": t["description"][:60], "detail": "",
                      "amount": abs(float(t["amount"] or 0)), "date": t["date"]} for t in result.data]
             return {"category": "Банк", "month": month, "rows": rows,
+                    "total": sum(r["amount"] for r in rows)}
+
+        elif category in ("production", "team", "other"):
+            rows = []
+            cat_filter = "production" if category == "production" else ("team" if category == "team" else None)
+            exclude_cats = {"salary", "marketing", "production", "team", "salon_rent", "bank_fee"}
+            for tbl, cat_field, desc_field in [
+                ("bank_transactions", "category", "description"),
+                ("personal_transactions", "expense_category", "description"),
+            ]:
+                q = supabase.table(tbl).select(f"date,amount,{desc_field},{cat_field}").eq(
+                    "company_id", COMPANY_ID
+                ).eq("project", project).gte("date", date_from).lte("date", date_to).lt("amount", 0)
+                if cat_filter:
+                    q = q.eq(cat_field, cat_filter)
+                res = q.execute()
+                for t in res.data:
+                    t_cat = (t.get(cat_field) or "").strip()
+                    if not cat_filter and t_cat in exclude_cats:
+                        continue
+                    rows.append({
+                        "label": (t.get(desc_field) or "")[:60],
+                        "detail": tbl.replace("_transactions", ""),
+                        "amount": abs(float(t["amount"] or 0)),
+                        "date": t["date"][:10]
+                    })
+            label_map = {"production": "Продакшн", "team": "Команда", "other": "Прочее"}
+            return {"category": label_map.get(category, category), "month": month, "rows": rows,
                     "total": sum(r["amount"] for r in rows)}
 
         elif category in ("revenue_services", "revenue_certificates", "revenue_abonements", "revenue_fitmost"):

@@ -38,6 +38,7 @@ async function loadPL() {
     }
   }
 
+  renderPLHead();
   renderPLSnapshot(months);
   renderPLTable(months);
 }
@@ -97,11 +98,67 @@ function renderPLSnapshot(months) {
   }
 }
 
+function renderPLHead() {
+  const thead = document.getElementById('pl-thead');
+  if (!thead) return;
+  const isSalon = currentPLProject === 'salon';
+  thead.innerHTML = `
+    <tr>
+      <th rowspan="2" style="vertical-align:middle;min-width:80px">Месяц</th>
+      ${isSalon
+        ? '<th colspan="5" class="text-center text-green fw-bold" style="background:#d3f9d8;border-bottom:none;padding-bottom:4px">Выручка</th>'
+        : '<th colspan="1" class="text-center text-green fw-bold" style="background:#d3f9d8;border-bottom:none;padding-bottom:4px">Выручка</th>'}
+      ${isSalon
+        ? '<th colspan="7" class="text-center text-red fw-bold" style="background:#ffe0e0;border-bottom:none;padding-bottom:4px">Расходы</th>'
+        : `<th colspan="${isSalon ? 5 : 6}" class="text-center text-red fw-bold" style="background:#ffe0e0;border-bottom:none;padding-bottom:4px">Расходы</th>`}
+      <th rowspan="2" class="text-end fw-bold" style="vertical-align:middle;background:#e8f4fd;min-width:80px">EBITDA</th>
+    </tr>
+    <tr>
+      ${isSalon ? `
+        <th class="text-end" style="background:#f0fdf4">Услуги</th>
+        <th class="text-end" style="background:#f0fdf4">Сертиф.</th>
+        <th class="text-end" style="background:#f0fdf4">Абон.</th>
+        <th class="text-end" style="background:#f0fdf4">Fitmost</th>` : ''}
+      <th class="text-end fw-bold" style="background:#d3f9d8">Итого</th>
+      <th class="text-end" style="background:#fff5f5">ФОТ</th>
+      ${isSalon ? `
+        <th class="text-end" style="background:#fff5f5">Аренда</th>
+        <th class="text-end" style="background:#fff5f5">Космет.</th>` : ''}
+      ${!isSalon ? '<th class="text-end" style="background:#fff5f5">Аренда</th>' : ''}
+      <th class="text-end" style="background:#fff5f5">${isSalon ? 'Матер.' : 'Продакшн'}</th>
+      <th class="text-end" style="background:#fff5f5">Маркет.</th>
+      ${isSalon ? '<th class="text-end" style="background:#fff5f5">Банк</th>' : ''}
+      <th class="text-end" style="background:#fff5f5">Прочее</th>
+      <th class="text-end fw-bold" style="background:#ffe0e0">Итого</th>
+    </tr>`;
+}
+
 function renderPLTable(months) {
   const tbody = document.getElementById('pl-tbody');
   if (!months.length) {
     tbody.innerHTML = '<tr><td colspan="14" class="text-center text-muted py-4">Нет данных за выбранный проект</td></tr>';
     return;
+  }
+
+  // Итоговая строка
+  const totalRev = months.reduce((s,m) => s + m.total_revenue, 0);
+  const totalExp = months.reduce((s,m) => s + m.total_expenses, 0);
+  const totalProfit = totalRev - totalExp;
+
+  // Показываем итог под таблицей
+  const summaryEl = document.getElementById('pl-total-summary');
+  if (summaryEl) {
+    if (currentPLProject !== 'salon' && totalProfit < 0) {
+      summaryEl.innerHTML = `
+        <div class="d-flex gap-4 align-items-center p-3" style="background:#fff0f0; border-radius:8px; margin-top:12px">
+          <div><div class="text-muted small">Всего вложено</div><div class="fw-bold text-red fs-4">${formatMoney(totalExp)}</div></div>
+          <div><div class="text-muted small">Всего доходов</div><div class="fw-bold text-green fs-4">${formatMoney(totalRev)}</div></div>
+          <div><div class="text-muted small">Итого инвестиций</div><div class="fw-bold text-red fs-4">${formatMoney(Math.abs(totalProfit))}</div></div>
+        </div>`;
+      summaryEl.classList.remove('d-none');
+    } else {
+      summaryEl.classList.add('d-none');
+    }
   }
 
   tbody.innerHTML = months.map(m => {
@@ -119,12 +176,12 @@ function renderPLTable(months) {
         <td class="text-end" style="color:#2f9e44">${formatK(m.revenue_abonements)}</td>
         <td class="text-end" style="color:#2f9e44">${formatK(m.revenue_fitmost)}</td>
         <td class="text-end fw-bold" style="background:#d3f9d8;color:#1e7e34">${formatK(m.total_revenue)}</td>
-        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','salary','ФОТ')" title="Детализация">${formatK(m.salary)}</td>
-        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','salon_rent','Аренда')" title="Детализация">${formatK(m.rent)}</td>
-        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','cosmetics','Косметика')" title="Детализация">${formatK(m.cosmetics)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','salary','ФОТ',${m.salary})" title="Детализация">${formatK(m.salary)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','salon_rent','Аренда',${m.rent})" title="Детализация">${formatK(m.rent)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','cosmetics','Косметика',${m.cosmetics})" title="Детализация">${formatK(m.cosmetics)}</td>
         <td class="text-end" style="color:#c92a2a">${formatK(m.materials)}</td>
-        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','marketing','Маркетинг')" title="Детализация">${formatK(m.marketing)}</td>
-        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','bank_fees','Банк')" title="Детализация">${formatK(m.bank_fees)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','marketing','Маркетинг',${m.marketing})" title="Детализация">${formatK(m.marketing)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','bank_fees','Банк',${m.bank_fees})" title="Детализация">${formatK(m.bank_fees)}</td>
         <td class="text-end fw-bold" style="background:#ffe0e0;color:#c92a2a">${formatK(m.total_expenses)}</td>
         <td class="text-end ${profitClass}" style="${profitBg}">${profit >= 0 ? '+' : ''}${formatK(profit)}</td>
       </tr>`;
@@ -132,14 +189,12 @@ function renderPLTable(months) {
       return `
       <tr>
         <td><span class="fw-bold">${m.month}</span></td>
-        <td class="text-end" style="color:#2f9e44" colspan="4">${formatK(m.revenue_other || m.total_revenue)}</td>
         <td class="text-end fw-bold" style="background:#d3f9d8;color:#1e7e34">${formatK(m.total_revenue)}</td>
-        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','salary','ФОТ')" title="Детализация">${formatK(m.salary)}</td>
-        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','salon_rent','Аренда')" title="Детализация">${formatK(m.rent)}</td>
-        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','cosmetics','Косметика')" title="Детализация">${formatK(m.cosmetics)}</td>
-        <td class="text-end" style="color:#c92a2a">${formatK(m.materials)}</td>
-        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','marketing','Маркетинг')" title="Детализация">${formatK(m.marketing)}</td>
-        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','bank_fees','Банк')" title="Детализация">${formatK(m.bank_fees)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','salary','ФОТ',${m.salary})" title="Детализация">${formatK(m.salary)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','rent','Аренда',${m.rent})" title="Детализация">${formatK(m.rent)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','production','Продакшн',${m.materials})" title="Детализация">${formatK(m.materials)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','marketing','Маркетинг',${m.marketing})" title="Детализация">${formatK(m.marketing)}</td>
+        <td class="text-end" style="color:#c92a2a;cursor:pointer" onclick="showPLDetail('${m.month}','other','Прочее',${m.other||0})" title="Детализация">${formatK(m.other || 0)}</td>
         <td class="text-end fw-bold" style="background:#ffe0e0;color:#c92a2a">${formatK(m.total_expenses)}</td>
         <td class="text-end ${profitClass}" style="${profitBg}">${profit >= 0 ? '+' : ''}${formatK(profit)}</td>
       </tr>`;
@@ -149,7 +204,8 @@ function renderPLTable(months) {
 
 
 // ── P&L Drill-down ──────────────────────────────────────────
-async function showPLDetail(month, category, label) {
+async function showPLDetail(month, category, label, amount) {
+  if (amount !== undefined && amount === 0) return;
   const modalEl = document.getElementById('pl-detail-modal');
   if (!modalEl) return;
 
@@ -158,7 +214,7 @@ async function showPLDetail(month, category, label) {
 
   modalEl.style.display = 'flex';
 
-  const data = await fetchData(`/analytics/pl-detail?month=${month}&category=${category}`);
+  const data = await fetchData(`/analytics/pl-detail?month=${month}&category=${category}&project=${currentPLProject}`);
   if (!data || data.error) {
     document.getElementById('pl-detail-body').innerHTML = '<div class="text-danger py-3">Ошибка загрузки</div>';
     return;

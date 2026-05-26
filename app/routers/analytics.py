@@ -2441,3 +2441,75 @@ async def delete_product_sale(sale_id: int):
         return {"ok": True}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+# ══════════════════════════════════════════════════════════════
+# ГИПОТЕЗЫ / IDEAS
+# ══════════════════════════════════════════════════════════════
+
+@router.get("/hypotheses", summary="Список гипотез")
+async def get_hypotheses():
+    try:
+        from app.database import supabase
+        result = supabase.table("hypotheses").select("*").eq(
+            "company_id", COMPANY_ID
+        ).order("score", desc=True).execute()
+        return {"hypotheses": result.data}
+    except Exception as e:
+        return {"error": str(e)}
+
+@router.post("/hypotheses", summary="Добавить гипотезу")
+async def add_hypothesis(body: dict = Body(...)):
+    try:
+        from app.database import supabase
+        result = supabase.table("hypotheses").insert({
+            "company_id": COMPANY_ID,
+            "name":         body.get("name", ""),
+            "tag":          body.get("tag", ""),
+            "segment":      body.get("segment", ""),
+            "pain_level":   body.get("pain_level", ""),
+            "market_size":  body.get("market_size", ""),
+            "monetization": body.get("monetization", ""),
+            "risk_text":    body.get("risk_text", ""),
+            "risk_level":   body.get("risk_level", "amber"),
+            "status":       body.get("status", "Идея"),
+            "score":        int(body.get("score", 0)),
+            "prd_problem":  body.get("prd_problem", ""),
+            "prd_outcome":  body.get("prd_outcome", ""),
+            "prd_kr":       body.get("prd_kr", ""),
+            "prd_mvp":      body.get("prd_mvp", ""),
+            "prd_diff":     body.get("prd_diff", ""),
+            "prd_risk":     body.get("prd_risk", ""),
+            "prd_data":     body.get("prd_data", ""),
+            "doc_url":      body.get("doc_url", ""),
+        }).execute()
+        return {"ok": True, "hypothesis": result.data[0]}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+@router.put("/hypotheses/{hyp_id}", summary="Обновить гипотезу")
+async def update_hypothesis(hyp_id: int, body: dict = Body(...)):
+    try:
+        from app.database import supabase
+        allowed = ["name","tag","segment","pain_level","market_size",
+                   "monetization","risk_text","risk_level","status","score",
+                   "prd_problem","prd_outcome","prd_kr","prd_mvp",
+                   "prd_diff","prd_risk","prd_data","doc_url"]
+        update = {k: body[k] for k in allowed if k in body}
+        supabase.table("hypotheses").update(update).eq("id", hyp_id).eq(
+            "company_id", COMPANY_ID
+        ).execute()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+@router.delete("/hypotheses/{hyp_id}", summary="Удалить гипотезу")
+async def delete_hypothesis(hyp_id: int):
+    try:
+        from app.database import supabase
+        supabase.table("hypotheses").delete().eq("id", hyp_id).eq(
+            "company_id", COMPANY_ID
+        ).execute()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}

@@ -18,7 +18,7 @@ async function loadPL() {
   if (!data || !data.months) return;
 
   const months = [...data.months]
-    .filter(m => m.total_revenue > 0)
+    .filter(m => m.total_revenue > 0 || m.total_expenses > 0)
     .reverse();
 
   const title = document.getElementById('pl-table-title');

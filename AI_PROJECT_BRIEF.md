@@ -1,7 +1,6 @@
 ---
-Generated: 2026-04-29
-Source: chat history analysis
-Version: 1.0
+Generated: 2026-05-27
+Version: 2.0
 Next review: после каждой новой сессии разработки
 ---
 
@@ -10,1349 +9,222 @@ Next review: после каждой новой сессии разработк�
 ## 1. PROJECT IDENTITY
 
 - **Название:** Insalon
-- **Тип бизнеса:** SaaS управленческая аналитика для beauty/SPA салонов
-- **Ниша:** HeadSPA + массажный салон (headspa.beauty), Москва
-- **Целевая аудитория:** Владельцы и управляющие beauty/SPA салонов работающих на YCLIENTS CRM
-- **Главная цель:** Управленческий дашборд поверх YCLIENTS — P&L, эффективность мастеров, обязательства, денежный поток
-- **Текущая фаза:** development
-- **Домен:** https://check.moscow (Tilda заглушка)
+- **Тип:** Персональный управленческий дашборд владельца HeadSPA салона
+- **Ниша:** HeadSPA + SPA салон (Москва)
+- **Главная цель:** Единый дашборд для управления бизнесом — P&L, сотрудники, обязательства, идеи/проекты
+- **Текущая фаза:** production (активно используется)
 - **API:** https://insalon.onrender.com
 - **GitHub:** https://github.com/dvasincom-sketch/insalon
+- **Локальная разработка:** `/Users/dmitryvasin/insalon/` (Mac OS, Python venv)
 
 ---
 
 ## 2. TECH STACK
 
 ### Frontend
-- **Tabler UI** (Bootstrap 5) — новый дашборд `/v2/` — выбран за профессиональный вид, готовые компоненты
-- **ApexCharts** — графики (выручка по неделям, utilization)
-- **Bootstrap 5** (старый дашборд `/dashboard`) — первый MVP, заменяется на Tabler
-- Vanilla JS (fetch API, без фреймворков)
+- **Tabler UI** (Bootstrap 5) — дашборд `static/v3/`
+- **ApexCharts** — графики
+- **Vanilla JS** — без фреймворков, fetch API
+- Основные JS файлы: `router.js`, `pl.js`, `schedule.js`, `staff.js`, `obligations.js`, `ideas.js`
 
 ### Backend
-- **Python 3.11** + **FastAPI** — REST API
-- **Uvicorn** — ASGI сервер
-- **Supabase Python SDK** — клиент БД
-- **httpx** — HTTP клиент для YCLIENTS API
-- **python-dotenv** — конфигурация
+- **Python 3.11** + **FastAPI**
+- **Supabase Python SDK**
+- **httpx** — YCLIENTS API клиент
+- Роутеры: `analytics.py`, `payroll.py`, `sync.py`, `obligations.py`
 
 ### База данных
-- **Supabase PostgreSQL** — https://qtxnpnioobocidbujbja.supabase.co
-- RLS отключён на всех таблицах
+- **Supabase PostgreSQL**
+- Company ID: **1166484**
+- RLS: включён на `hypotheses` (policy "allow all"), остальные таблицы без RLS
 
 ### Инфраструктура
-- **Render** — хостинг бэкенда (insalon.onrender.com)
-- **Tilda** — лендинг check.moscow
-- **Mac OS** — локальная разработка, Python venv в `/Users/dmitryvasin/insalon/`
+- **Render** — хостинг (insalon.onrender.com), автодеплой из GitHub main
+- **GitHub Actions** — daily-sync.yml, запуск в 00:00 UTC (03:00 МСК)
+- **Mac OS** — локальная разработка
 
 ### Внешние интеграции
-- **YCLIENTS API** — основной источник данных (записи, транзакции, клиенты, услуги, сотрудники)
+- **YCLIENTS API** — записи, транзакции, клиенты, услуги, сотрудники
   - Partner Token: Oh9H0Xglx8Q1c52t2DO4
   - Company ID: 1166484
-  - Application ID: 41238
-- **Fitmost** — партнёр агрегатор (скидка 35%, платежи следующего месяца)
-- **Аванпост (ЮKassa)** — эквайринг онлайн-платежей
+- **Fitmost** — агрегатор, скидка 35%, платежи следующего месяца
 - **Т-банк** — расчётный счёт ИП + физическая карта
-- **Wildberries** — закупка расходников (физ карта)
-- **Яндекс Аренда** — аренда квартиры (личное)
-
-### Инструменты разработки
-- **VS Code** — редактор
-- **Supabase SQL Editor** — прямые SQL запросы
-- **Git + GitHub** — версионирование
+- **Яндекс.Касса (ЮKassa / Аванпост)** — эквайринг
 
 ---
 
 ## 3. ARCHITECTURE MAP
 
-| Модуль | Назначение | Статус | Зависимости |
-|--------|-----------|--------|-------------|
-| `app/main.py` | FastAPI app, роутеры, StaticFiles | done | все роутеры |
-| `app/database.py` | Supabase клиент, save/get функции | done | supabase-py |
-| `app/yclients.py` | YCLIENTS API клиент | done | httpx |
-| `app/analytics.py` | Расчёты инсайтов (summary, revenue, churn, services) | done | supabase |
-| `app/routers/sync.py` | /sync/records, /sync/clients, /sync/all | done | yclients.py |
-| `app/routers/analytics.py` | /analytics/* — все аналитические эндпоинты | done | analytics.py |
-| `app/routers/checks.py` | /checks/ — проверки качества данных | done | supabase |
-| `app/routers/oauth.py` | /connect, /oauth/callback, /auth | done | yclients.py |
-| `app/routers/webhooks.py` | /webhook/yclients, /webhook/disconnect | done | supabase |
-| `static/index.html` | Старый дашборд Bootstrap (MVP) | done | - |
-| `static/v2/index.html` | Новый дашборд Tabler UI | in-progress | ApexCharts |
-| `scripts/import_bank.py` | Импорт выписки ИП (bank_transactions) | done | supabase |
-| `scripts/import_personal.py` | Импорт выписки физ карты (personal_transactions) | done | supabase |
-| Автосинхронизация cron | Ежедневная синхронизация данных | planned | - |
-| Публичное приложение YCLIENTS | Модерация | blocked | YCLIENTS |
+| Модуль | Назначение | Статус |
+|--------|-----------|--------|
+| `app/routers/analytics.py` | Все аналитические эндпоинты `/analytics/*` | done |
+| `app/routers/payroll.py` | Расписание смен, расчёт ФОТ `/payroll/*` | done |
+| `app/routers/sync.py` | Синхронизация YCLIENTS `/sync/*` | done |
+| `app/routers/obligations.py` | Обязательства `/obligations/*` | done |
+| `app/yclients.py` | YCLIENTS API клиент | done |
+| `app/database.py` | Supabase клиент, save функции | done |
+| `static/v3/index.html` | Главный дашборд | done |
+| `static/v3/js/router.js` | Навигация между разделами | done |
+| `static/v3/js/pl.js` | P&L отчёт | done |
+| `static/v3/js/schedule.js` | Расписание и парные программы | done |
+| `static/v3/js/staff.js` | Эффективность сотрудников | done |
+| `static/v3/js/obligations.js` | Обязательства и платежи | done |
+| `static/v3/js/ideas.js` | Раздел Идеи/Проекты | done |
+| `.github/workflows/daily-sync.yml` | Ежедневная синхронизация | done |
 
 ---
 
-## 4. CURRENT FOCUS
+## 4. РАЗДЕЛЫ ДАШБОРДА
 
-### Разрабатывается сейчас
-**Новый дашборд Tabler UI** (`static/v2/index.html`) + **раздел Сотрудники**
+### Пульс системы
+- KPI карточки: выручка, визиты, клиенты за 30 дней
+- North Star: CM/LH (прибыль на оплаченный час)
+- График выручки по неделям с drill-down
+- Парные программы — список дней где нужен второй мастер
 
-### Реализовано в v2 дашборде
-- ✅ North Star Metric: CM/LH (прибыль на оплаченный час мастера)
-- ✅ KPI карточки: выручка/визиты/клиенты за 30 дней со сравнением
-- ✅ График выручки по неделям с drill-down (клик → транзакции недели)
-- ✅ График Новые vs Повторные клиенты
-- ✅ P&L таблица только по салону (очищена от личных расходов)
-- ✅ Таб Сотрудники → Эффективность (daily коэффициент, абонементы, двойные смены)
-- ✅ Таб Сотрудники → Расписание (календарь с цветами по мастерам)
-- ✅ Таб Сотрудники → Оплата труда (ведомость с фильтрами)
-- ✅ Экран Обязательства (график платежей на месяц)
+### Идеи (новый раздел, 2026-05-27)
+- Таблица бизнес-гипотез и проектов
+- Колонки: тип, сроки, фокус, CapEx план, прибыль план, статус
+- Модал с PRD: проблема, результат, MVP, риск, ключевые результаты
+- Свободные строки CapEx (статья + сумма)
+- Связь с P&L через `project_key` — фактические расходы/доходы из транзакций
+- Добавление через интерфейс (модал)
+- Хранение: таблица `hypotheses` в Supabase
 
-### В процессе
-- 🔄 Фильтры в ведомости оплаты труда (баг с обновлением данных)
-- 🔄 Сверка payroll с реальными выплатами из выписки
+### P&L
+- Проекты: salon, podcast, book, consulting, personal, internal
+- Для салона: колонки Услуги/Сертиф./Абон./Fitmost/ФОТ/Аренда/Космет./Матер./Маркет./Банк
+- Для других проектов: колонки ФОТ/Аренда/Продакшн/Маркет./Прочее
+- Итог инвестиций под таблицей (для проектов без выручки)
+- Детализация по клику на ячейку (модал с транзакциями)
+- Фильтрация детализации по `project` — не смешивать салон с подкастом
+- Таб Транзакции — inline редактирование категории и проекта
+- Таб Сверка — план vs факт по match_rule
 
-### Заблокировано
-- ❌ Расписание смен из YCLIENTS API — эндпоинт недоступен, решение: таблица `shifts` в Supabase заполняется вручную
-- ❌ Utilization heatmap — заглушка, нужны реальные данные из расписания
-- ❌ Bridge Conversion SPA→Массаж — не реализован
-- ❌ Данные физ карты за ноябрь 2025 — отсутствуют в выписке
+### Сотрудники
+- Эффективность: коэффициент выручка/смена, прибыльные/убыточные смены
+- Расписание: календарь смен, парные программы, назначение второго мастера
+- Оплата труда: ведомость с периодами 1–14 и 15–31
+- ФОТ: расчёт с учётом авансов
 
-### Открытые вопросы
-- Как автоматически определять смены мастеров без ручного ввода?
-- Как учитывать бонусы мастеров в payroll автоматически?
-
----
-
-## 5. DECISIONS LOG
-
-**Решение:** Tabler UI вместо Bootstrap для нового дашборда
-**Причина:** Профессиональный вид, готовые компоненты, Bootstrap 5 основа
-**Альтернативы:** Bootstrap (старый MVP), Keenthemes Metronic (рассматривался)
-**Контекст:** Начало разработки v2
-
----
-
-**Решение:** Выручка из `transactions` (YCLIENTS), не из `records.service_cost`
-**Причина:** `service_cost` не отражает полную сумму (аванс + остаток), транзакции точнее
-**Альтернативы:** `records.service_cost` — отвергнуто из-за неточности
+### Обязательства
+- График платежей на месяц с автоматическим матчингом транзакций
+- `match_rule` (regex) + `match_source` (bank/personal/both) + диапазон суммы
+- ФОТ на 1-е = плановый ФОТ 15–31 минус авансы выплаченные за этот период
+- Статусы: Оплачен / Просрочен / Ожидается / Долг
 
 ---
 
-**Решение:** Абонементы в отчёте мастера = прайс × 0.7 (скидка 30%)
-**Причина:** Клиент платит со скидкой 30% за 5 сеансов, мастер проводит полный сеанс
-**Контекст:** Для P&L — продажа абонемента в день оплаты; для мастера — начисление в день использования
+## 5. КЛЮЧЕВЫЕ ТАБЛИЦЫ SUPABASE
+
+| Таблица | Назначение |
+|---------|-----------|
+| `records` | Записи клиентов из YCLIENTS |
+| `transactions` | Транзакции из YCLIENTS (оплаты услуг) |
+| `bank_transactions` | Банковская выписка ИП (Т-банк) |
+| `personal_transactions` | Выписка физ карты |
+| `shifts` | Расписание смен (заполняется вручную) |
+| `payroll` | Ведомость оплаты труда по периодам |
+| `staff_payment_aliases` | Алиасы мастеров для матчинга авансов |
+| `obligations` | Обязательства и долги |
+| `hypotheses` | Бизнес-гипотезы и проекты (новая) |
+| `salons` | Данные салона и токен YCLIENTS |
+
+### Поля obligations
+`id, company_id, type, project, expense_category, description, amount, day_of_month, is_active, notes, start_date, end_date, last_payment_date, match_rule, match_source, match_amount_min, match_amount_max`
+
+### Поля hypotheses
+`id, company_id, name, tag, segment, pain_level, market_size, monetization, risk_text, risk_level, status, score, prd_problem, prd_outcome, prd_kr, prd_mvp, prd_diff, prd_risk, prd_data, doc_url, project_type, date_start, date_end, focus_level, capex_items (jsonb), capex_total, expected_profit_monthly, expected_profit_onetime, profit_type, project_key`
 
 ---
 
-**Решение:** Выходные с двумя мастерами → выручка / 2 на каждого
-**Причина:** Мастера работают поочерёдно, все записи могут висеть на одном
-**Источник данных:** Таблица `shifts` в Supabase (заполняется вручную по скриншоту расписания)
+## 6. ПРОЕКТЫ В ТРАНЗАКЦИЯХ
+
+| project_key | Название | Описание |
+|-------------|---------|---------|
+| salon | Салон HeadSPA | Основной бизнес |
+| podcast | Подкаст (NOISHA) | Категории: salary/production/rent/marketing/team |
+| book | Книга | Творческий актив |
+| consulting | Консалтинг | — |
+| personal | Личное | Личные расходы |
+| internal | Внутренние | Переводы между счетами |
+
+### Категории расходов подкаста
+- `salary` — продюсер (договор 502/1, 35 000₽/мес)
+- `production` — монтаж, съёмка
+- `rent` — аренда студии (счета-договоры)
+- `marketing` — реклама, Kwork
+- `team` — гонорары команде (Фатимат, Надежда, Андрей и др.)
 
 ---
 
-**Решение:** Скользящие 30 дней вместо календарного месяца для KPI
-**Причина:** Не зависит от дня месяца, более честное сравнение
+## 7. СИНХРОНИЗАЦИЯ
 
----
+### GitHub Actions daily-sync.yml (00:00 UTC)
+1. `GET /sync/recent` — записи за последние 3 дня + транзакции
+2. `sleep 60`
+3. `GET /sync/records-now?date_from=TODAY&date_to=TODAY+7d` — будущие записи
+4. `GET /sync/transactions-now` — транзакции за 365 дней
 
-**Решение:** Fitmost выручка учитывается по `period` (месяц визита), не по дате платежа
-**Причина:** Платежи от Fitmost приходят в следующем месяце за предыдущий
-
----
-
-**Решение:** Аренда салона учитывается по `period`, не по дате платежа
-**Причина:** Платёж 25-го числа идёт за следующий месяц (Гилтон)
-
----
-
-**Решение:** Разметка проектов в транзакциях (поле `project`)
-**Причина:** Разделение салона, подкаста, книги, startup для чистого P&L
-**Проекты:** salon, podcast, book, startup, consulting, enzyme, personal, internal
-
----
-
-**Решение:** Пагинация Supabase (fetch_all) для personal_transactions
-**Причина:** По умолчанию возвращает 1000 строк, у нас 2000+ — данные обрезались
-
----
-
-**Решение:** Овердрафт ИП (7032869405) = операционный инструмент салона
-**Причина:** Используется только для кассовых разрывов бизнеса
-**Категории:** тело = `financing`, проценты = `overdraft_interest`
-
----
-
-## 6. ANTI-PATTERNS
-
-- **Не брать выручку из `records.service_cost`** — неточно, не отражает авансы и доплаты
-- **Не использовать `records.service_cost = 0` как "нет выручки"** — это оплата абонементом/сертификатом
-- **Не смешивать личные расходы с бизнесом** — физ карта содержит и личное и бизнес
-- **Не считать выплаты 1-го числа как зарплату текущего месяца** — это выплата за предыдущий
-- **Не использовать дату платежа для аренды и Fitmost** — нужен `period`
-- **Не делать дашборд без пагинации Supabase** — обрезает данные на 1000 строк
-- **Не считать наличные из кассы как аванс мастеру** — это просто способ оплаты клиента
-- **Не использовать `dataPointSelection` в ApexCharts** — не работает, использовать `markerClick` или кликабельные строки таблицы
-- **Не хранить расписание смен только из records** — администратор может не проставить мастера
-- **Не использовать `bootstrap.Modal`** — в Tabler используется `tabler.Modal` или нативный подход
-
----
-
-## 7. GLOSSARY
-
-| Термин | Значение в контексте проекта |
-|--------|------------------------------|
-| CM/LH | Contribution Margin per Labor Hour — прибыль на оплаченный час мастера (North Star) |
-| Fitmost | Партнёр-агрегатор, скидка 35% клиентам, платит в следующем месяце |
-| is_fitmost | Флаг в records — запись создана администратором как дубль Fitmost |
-| period | Поле в bank_transactions — месяц к которому относится платёж (не дата платежа) |
-| Аванпост | Эквайринг ЮKassa для онлайн-платежей салона |
-| Гилтон | ООО "ГИЛТОН" — арендодатель салона, 93 000 ₽/мес, платёж 25-го за след месяц |
-| Живая косметика | ООО "ЛАБОРАТОРИЯ ЖИВАЯ КОСМЕТИКА-ПРО" — поставщик косметики |
-| Двойная смена | Выходной день когда работают 2 мастера, выручка делится поровну |
-| Выход под запись | Мастер выходит на одну конкретную запись, оплата = стоимость услуги |
-| salon/personal/podcast/book/startup | Проекты для разметки транзакций |
-| Обязательства | Таблица `obligations` — периодические и единовременные платежи |
-| Payroll | Таблица `payroll` — ведомость оплаты труда по периодам 1-14 и 15-31 |
-| Shifts | Таблица `shifts` — расписание смен мастеров (заполняется вручную) |
-| Александра Т. | Старший мастер, тренер, 14 смен/мес норма, бонус за старшего |
-| Светлана Б. | Мастер SPA, тренер |
-| Екатерина Б. | Мастер SPA (медицинское образование) |
-| Анастасия К. | Мастер SPA (медицинское образование) |
-| Марина Ц. | Мастер SPA |
-| Мария | Мастер только под запись, оплата день в день на карту |
-| Фарид | Упомянут в контексте наличных выплат |
-
----
-
-## 8. RULES OF ENGAGEMENT
-
-### Роль и экспертиза владельца
-- Дмитрий Васин — основатель/владелец HeadSPA салона и Insalon
-- Предприниматель, не разработчик — понимает бизнес логику глубоко
-- Знает Python базово, умеет запускать команды в терминале
-- Хорошо понимает финансы: P&L, cash flow, unit-экономика
-
-### Стиль общения
-- Прямой, без лишних объяснений
-- Сначала сделать → потом показать результат
-- Все изменения через терминал (не через VS Code вручную)
-- Русский язык
-
-### Формат кода
-- Всегда давать готовые команды для терминала
-- Использовать `python3 - << 'PYEOF'` для Python скриптов
-- Использовать `cat >> file << 'EOF'` для добавления кода
-- После каждого изменения — проверочная команда
-
-### Что НЕ нужно объяснять
-- Что такое SQL, JSON, API
-- Как работает FastAPI/Supabase в целом
-- Базовые концепции P&L, зарплат, аренды
-
-### Частота вопросов
-- Минимум — только когда реально непонятна бизнес-логика
-- Лучше предложить вариант и скорректировать по факту
-
----
-
-## 9. NEXT STEPS
-
-### Ближайшая задача
-Починить фильтры в ведомости оплаты труда (таб "Оплата труда" в разделе Сотрудники) — при выборе сотрудника/месяца данные не обновляются.
-
-**Корень проблемы:** Скорее всего `onchange` вызывает `loadPayroll()` но функция читает значения фильтров до того как DOM обновился, либо есть проблема с `window.payrollLoaded`.
-
-### Что нужно решить перед следующими задачами
-1. Починить фильтры payroll
-2. Загрузить выписку физ карты за ноябрь 2025 (данные отсутствуют)
-3. Перевыпустить partner token YCLIENTS (засвечен в истории)
-
-### Следующие крупные задачи
-1. Utilization heatmap с реальными данными
-2. Bridge Conversion SPA→Массаж
-3. Многоуровневый P&L с проектами
-4. Cash Flow прогноз
-5. Деплой на Render (обновить)
-6. Настроить cron автосинхронизацию
-
----
-
-## SUPABASE TABLES
-
-| Таблица | Описание | Ключевые поля |
-|---------|---------|---------------|
-| salons | Подключённые салоны | company_id, user_token |
-| records | Записи клиентов | attendance, is_fitmost, service_cost, duration, staff_name |
-| clients | База клиентов | is_new, success_visits |
-| transactions | Финансовые операции YCLIENTS | amount, type_title, account, date |
-| bank_transactions | Выписка расчётного счёта ИП | amount, category, project, period, counterparty |
-| personal_transactions | Выписка физ карты | amount, expense_category, project, description |
-| staff | Сотрудники из YCLIENTS | name, specialization |
-| services | Услуги из YCLIENTS | title, price_min, price_max |
-| obligations | Обязательства и долги | type, amount, day_of_month, start_date, end_date |
-| payroll | Ведомость оплаты труда | staff_name, period_start, total_accrued, advance_cash, balance |
-| shifts | Расписание смен | date, staff_name, is_double_shift, shift_pay |
-
-## KEY CREDENTIALS (не хранить в открытом доступе!)
-
-```
-YCLIENTS_PARTNER_TOKEN=Oh9H0Xglx8Q1c52t2DO4  ← ПЕРЕВЫПУСТИТЬ!
-YCLIENTS_COMPANY_ID=1166484
-SUPABASE_URL=https://qtxnpnioobocidbujbja.supabase.co
+### Ручная синхронизация
+```bash
+curl "https://insalon.onrender.com/sync/records-now?date_from=2026-05-01&date_to=2026-05-31"
+curl "https://insalon.onrender.com/sync/transactions-now"
 ```
 
-## API ENDPOINTS
+---
 
-| Эндпоинт | Описание |
-|----------|---------|
-| GET /analytics/summary | KPI за 30 дней |
-| GET /analytics/revenue?weeks=12 | Выручка по неделям |
-| GET /analytics/revenue/detail?date_from=&date_to= | Детализация транзакций |
-| GET /analytics/clients?weeks=12 | Новые vs повторные |
-| GET /analytics/churn?days=45 | Риск оттока |
-| GET /analytics/services | Топ услуги |
-| GET /analytics/pl | P&L по месяцам |
-| GET /analytics/cmph | CM/LH North Star |
-| GET /analytics/staff/daily?days=30 | Эффективность мастеров |
-| GET /analytics/obligations/{year}/{month} | Обязательства на месяц |
-| GET /analytics/payroll?months=6 | Ведомость оплаты труда |
-| GET /analytics/payroll/verify/{year}/{month} | Сверка выплат |
-| GET /analytics/shifts/{year}/{month} | Расписание смен |
-| GET /checks/ | Проверки качества данных |
-| POST /sync/records | Синхронизация записей |
-| POST /sync/all | Полная синхронизация |
+## 8. РЕШЕНИЯ И АНТИ-ПАТТЕРНЫ
+
+### Ключевые решения
+- **Выручка из `transactions` (YCLIENTS)**, не из `records.service_cost` — точнее
+- **Fitmost и аренда** учитываются по `period`, не по дате платежа
+- **Расписание смен** — таблица `shifts` (вручную), не из YCLIENTS API
+- **Абонементы** в отчёте мастера = прайс × 0.7 (скидка 30%)
+- **Парные программы** — второй мастер (`is_visit_only=True`) может добавляться несколько раз в день (исправлен баг 2026-05-27)
+- **Авансы** вычитаются из ФОТ на 1-е через `staff_payment_aliases`
+- **P&L для не-салонных проектов** — отдельные колонки, детализация фильтруется по `project`
+- **Пагинация Supabase** — `fetch_all` обязателен (лимит 1000 строк)
+- **Транзакции** — пагинация до последней страницы (не останавливаться на `len < 100`)
+
+### Анти-паттерны
+- Не брать выручку из `records.service_cost`
+- Не смешивать личные расходы с бизнесом в P&L
+- Не считать выплаты 1-го как зарплату текущего месяца
+- Не использовать дату платежа для аренды и Fitmost
+- Не делать детализацию P&L без фильтра по `project`
+- Не обновлять статус обязательств вручную через SQL если есть `match_rule`
+- Не использовать `bootstrap.Modal` — в Tabler нативный подход
 
 ---
 
-## CONFIDENCE SCORE
+## 9. КАК ДАВАТЬ КОМАНДЫ CLAUDE
 
-| Раздел | Оценка | Что добавить вручную |
-|--------|--------|---------------------|
-| Project Identity | 9/10 | — |
-| Tech Stack | 9/10 | Версии библиотек |
-| Architecture Map | 8/10 | Статусы могут устареть |
-| Current Focus | 9/10 | Обновлять после каждой сессии |
-| Decisions Log | 8/10 | Решения по UX деталям |
-| Anti-Patterns | 9/10 | — |
-| Glossary | 8/10 | Новые термины по мере появления |
-| Rules of Engagement | 9/10 | — |
-| Next Steps | 7/10 | Обновлять после каждой сессии |
+- Команды для изменения файлов: всегда через `python3 -c` или `cat > /tmp/fix.py << 'PYEOF'` — никогда не скачивать файл
+- Путь к роутерам: `/Users/dmitryvasin/insalon/app/routers/`
+- Путь к JS: `/Users/dmitryvasin/insalon/static/v3/js/`
+- Деплой: `git add ... && git commit -m "..." && git push origin main`
+- Локальный сервер: `uvicorn app.main:app --reload --port 8000`
+- Перезапуск: `lsof -ti:8000 | xargs kill -9 && sleep 2 && uvicorn app.main:app --reload --port 8000`
 
 ---
 
-## 12. ТАБЛИЦА VISIT_RECORDS (новая)
+## 10. DEV LOG
 
-Создана для хранения выходов мастеров под запись (парные программы).
+Логирование сессий: `POST https://insalon.onrender.com/dev-sessions`
 
-| Поле | Тип | Описание |
-|------|-----|---------|
-| id | bigserial | PK |
-| date | date | Дата выхода |
-| staff_name | text | Имя мастера |
-| service_title | text | Название услуги |
-| visit_pay | integer | Оплата выхода в рублях |
-| notes | text | Примечания |
-| created_at | timestamptz | Дата создания |
-
-### Тариф выхода под запись (парная программа)
-- duration < 6000 сек (< 100 мин) → 1 500 ₽
-- duration 6000–8400 сек (100–140 мин) → 2 000 ₽
-- duration > 8400 сек (> 140 мин) → 3 000 ₽
-
-### Логика определения выхода под запись
-- 1 мастер в смене + парная программа в этот день = второй мастер вышел под запись
-- 2 мастера в смене + парная программа = входит в смену, выход под запись не считается
-- Исторические данные берутся из поля `notes` таблицы `payroll`
-- Данные за март 2026 заполнены вручную по примечаниям payroll
-
-### Заполненные данные
-- Анастасия март 2026: 04(1500+2000), 09(5000), 13(2000), 17(2000), 20(1500), 27(2000)
-- Светлана март 2026: 05(2000+2000)
-- Марина март 2026: 06(3500)
-
----
-
-## 13. ПАРНЫЕ ПРОГРАММЫ
-
-### Услуги категории "для двоих" (фильтр: ILIKE '%для двоих%')
-- «Перерождение» для двоих
-- «Экспресс» для двоих
-- SPA для двоих в будни
-- SPA для двоих (запись через администратора)
-- «Ретрит» для двоих
-- «Весна» для двоих
-
-### Новые API эндпоинты
-| Эндпоинт | Описание |
-|----------|---------|
-| GET /analytics/couple-programs/{year}/{month} | Парные программы из records по месяцу |
-| GET /analytics/visit-records/{year}/{month} | Выходы под запись из visit_records |
-
-### Формат ответа couple-programs
 ```json
 {
-  "couple_days": {
-    "4": [{"service_title": "...", "staff_name": "...", "client_name": "...", "time": "14:00", "duration_min": 90, "visit_pay": 1500}]
-  }
+  "date": "2026-05-27",
+  "feature": "Название задачи",
+  "category": "dev",
+  "duration_min": 120,
+  "tokens_approx": 50000,
+  "notes": "Заметки"
 }
 ```
 
-### Формат ответа visit-records
-```json
-{
-  "visit_days": {
-    "4": [{"staff_name": "Анастасия", "visit_pay": 1500, "service_title": "...", "notes": "..."}]
-  }
-}
-```
-
----
-
-## 14. РАСПИСАНИЕ — ЛОГИКА ОТОБРАЖЕНИЯ
-
-### Цветовая схема календаря
-- Серые плашки (`bg-secondary`) — мастер вышел в смену (данные из `shifts`)
-- Розовые плашки (`bg-pink-lt`) — выход под запись (данные из `visit_records` или `couple-programs`)
-- `? неизвестен` — парная программа есть, но мастер под запись не определён
-
-### Правила отображения
-- 2 мастера в смене → парные программы не показываем (входят в смену)
-- 1 мастер в смене + данные в visit_records → показываем имя и сумму
-- 1 мастер в смене + нет в visit_records + есть couple-programs → показываем `? неизвестен — X ₽`
-- Мастер из records НЕ может совпадать с мастером смены (проверка `shiftNames.includes`)
-
-### ANTI-PATTERNS (дополнение)
-- Не использовать staff_name из records для определения мастера под запись — там висит мастер смены
-- Не смешивать visit_records и shifts — это разные типы выходов
-- Даты в visit_records должны быть того же года что и данные (была ошибка: внесли 2025 вместо 2026)
-
----
-
-## 15. PERSONAL_TRANSACTIONS — СТРУКТУРА
-
-Поля: id, company_id, datetime, date, card, status, amount, category, mcc, description, cashback, expense_category, created_at, period, project
-
-Нет поля `counterparty` — имя получателя хранится в поле `description`.
-
-### Категории expense_category
-- `salary` — выплаты сотрудникам
-- `internal` — внутренние переводы
-- `personal` — личные расходы
-- `production` — производственные расходы
-- `transfer_out` — переводы
-
-
----
-
-## 16. МАРИЯ — ОСОБЫЙ СЛУЧАЙ
-
-- Работает только под запись, смен нет (`shifts=0`, `shift_pay=0`)
-- В YCLIENTS записана как "Александра К." — так приходят переводы
-- Аванс получен 02.02.2026 = 5000 ₽ (до начала работы)
-- Записи в `payroll` создаются вручную — автосинхронизация не работает
-- За март 2026: выход 19.03, «Экспресс» для двоих, оплата 1500 ₽, баланс -3500 (долг)
-
----
-
-## 17. ТАРИФ ВЫХОДА ПОД ЗАПИСЬ — УТОЧНЁННЫЙ
-
-| Duration (сек) | Минуты | Оплата |
-|---|---|---|
-| < 6300 | < 105 мин | 1 500 ₽ |
-| 6300–8400 | 105–140 мин | 2 000 ₽ |
-| > 8400 | > 140 мин | 3 000 ₽ |
-
-«Экспресс» для двоих (6000 сек = 100 мин) → 1 500 ₽
-
----
-
-## 18. ЛОГИКА ФИЛЬТРА ПАРНЫХ ПРОГРАММ
-
-Если `service_cost < price_min * 0.5` → запись не считается парной (второй клиент не пришёл).
-Исключение: оплата сертификатом может давать `service_cost = 50%` при полной явке — проверять вручную.
-
-Пример: 18.03.2026 «Экспресс» для двоих, service_cost=5310, price_min=11800 → 5310 < 5900 → одиночная, не показываем.
-
----
-
-## 19. PAYROLL — НОВЫЕ ПОЛЯ
-
-- `visit_pay` — оплата выходов под запись (из таблицы visit_records)
-- `bonus_loyalty` — бонус за продажи/лояльность (ранее всё шло в `bonus`)
-- `bonus` — историческое поле, теперь = visit_pay + bonus_loyalty
-
-Формула: `bonus_loyalty = bonus - visit_pay`
-
-
----
-
-## 20. ТАБ СТАТУС ПРОВЕРОК
-
-### Расположение
-Сотрудники → ✅ Статус (4-й таб)
-
-### Проверки которые выполняются
-1. Мастер в расписании (shifts) совпадает с payroll notes
-2. Мастер в payroll notes совпадает с расписанием (shifts)
-3. Мастер не числится одновременно в смене и под запись
-4. Выход под запись из payroll есть в visit_records
-5. Парные программы — мастер под запись определён
-6. Количество смен в payroll совпадает с днями смен в примечаниях
-7. Дни выходов в payroll совпадают с visit_records по количеству и сумме
-
-### Логика проверки выходов
-- Сравниваем по СУММЕ (не по количеству записей) — одна запись 04.03=3500 = две записи 04.03=1500+04.03=2000
-- Если количество не совпадает но сумма совпадает → предупреждение (не ошибка)
-- Если и количество и сумма не совпадают → ошибка
-- Если количество совпадает но сумма нет → ошибка
-
-### Форматы notes которые парсит система
-1. Стандартный: `Выходы: 09.02=2000+13.02=2000`
-2. Произвольный: `Выход под запись 05.03=4000₽`
-Оба формата поддерживаются парсером.
-
-### ANTI-PATTERNS
-- НЕ использовать `?t=${bust}` cache-bust параметры — FastAPI их не принимает и запросы падают
-- НЕ объявлять переменные после их использования — JS hoisting не работает с const/let
-  Пример ошибки: `visitRecordSum2` объявлен на строке 1474, а `visitInPeriod` на строке 1479 — падает с "Cannot access uninitialized variable"
-- НЕ добавлять `disabled` option в select без `selected` — браузер не триггерит onchange при первом выборе
-
-### Новые эндпоинты
-| Эндпоинт | Описание |
-|----------|---------|
-| GET /analytics/payroll-schedule/{year}/{month} | Парсит notes из payroll, возвращает shifts_from_payroll и visits_from_payroll |
-
----
-
-## 21. ОПЛАТА ТРУДА — НОВЫЕ КОЛОНКИ
-
-Добавлены колонки между "Смен" и "Начислено":
-- **Дни смен** — парсится из notes: `Смены: 1,6,10,13,14`
-- **Дни выходов** — парсится из notes: `Выходы: 09.02=2000+13.02=2000`
-
-Функция валидации: `validatePayrollNotes(p)` — проверяет несуществующие даты в notes и выводит красную плашку рядом с примечаниями.
-
----
-
-## 22. SELECT ФИЛЬТРЫ — ВАЖНЫЕ ДЕТАЛИ
-
-- В фильтре Оплата труда: месяц передаётся как `YYYY-MM` (например `2026-03`)
-- В фильтре Статус: select без `disabled` option — иначе onchange не срабатывает
-- Фильтр Статус НЕ загружает данные автоматически при входе в таб — только при выборе месяца
-- После смены месяца в Статусе — `checks-body` очищается до "Загрузка..." перед запросом
-
-
----
-
-## 10. DATABASE SCHEMA REFERENCE
-
-> Актуально на 30.04.2026. Использовать в новых сессиях без повторных запросов к БД.
-
-### `payroll`
-| Колонка | Тип | Описание |
-|---|---|---|
-| company_id | integer | 1166484 |
-| staff_name | text | Имя мастера |
-| period_start | date | Начало периода (1-е или 15-е) |
-| period_end | date | Конец периода (14-е или последний день) |
-| payment_date | date | Дата выплаты (null если не выплачено) |
-| shifts | integer | Количество смен |
-| shift_pay | integer | Оплата за смены (кол-во × 5000) |
-| visit_pay | integer | Оплата выходов под запись |
-| bonus_loyalty | integer | Бонус продаж / лояльности |
-| bonus | integer | Прочие бонусы (премия, переработка) |
-| advance_cash | integer | Аванс наличными |
-| advance_transfer | integer | Аванс/выплата переводом |
-| expenses_reimbursement | integer | Компенсация расходов (отрицательное = долг) |
-| total_accrued | integer | shift_pay + visit_pay + bonus_loyalty + bonus + expenses_reimbursement |
-| total_paid | integer | advance_cash + advance_transfer |
-| balance | integer | total_accrued - total_paid |
-| notes | text | Детализация: смены, авансы, бонусы |
-
-Логика периодов: 1–14 и 15–последний день. Выплата остатка за период 1 — 15-го. За период 2 — 1-го следующего месяца.
-
-### `shifts`
-| Колонка | Тип | Описание |
-|---|---|---|
-| company_id | integer | 1166484 |
-| date | date | Дата смены |
-| staff_name | text | Имя мастера |
-| shift_pay | integer | 5000 обычно, 0 если выход под запись |
-| is_double_shift | boolean | true = двойная смена (2 мастера в день) |
-| is_visit_only | boolean | true = выход под запись, не полная смена |
-| notes | text | Комментарий |
-
-Логика двойных смен: оба мастера по 5000₽, выручка дня ÷ 2 при расчёте эффективности.
-
-### `visit_records`
-| Колонка | Тип | Описание |
-|---|---|---|
-| date | date | Дата выхода |
-| staff_name | text | Имя мастера |
-| service_title | text | Название услуги (обычно "SPA для двоих") |
-| visit_pay | integer | Оплата выхода в рублях |
-| notes | text | Комментарий |
-
-### `personal_transactions`
-| Колонка | Тип | Описание |
-|---|---|---|
-| date | date | Дата операции |
-| amount | numeric | Сумма (отрицательная = расход) |
-| description | text | Контрагент (НЕ counterparty — такой колонки нет!) |
-| expense_category | text | Наша разметка: salary, materials, marketing, transport… |
-| project | text | Проект: salon, personal, podcast… |
-| period | date | Период начисления (важно для аренды/Fitmost) |
-
-Для сверки выплат мастерам: WHERE expense_category = 'salary' AND project = 'salon'.
-
-
----
-
-## 11. DATA GOVERNANCE (Solid-Finance)
-
-> Добавлено 30.04.2026
-
-### Классификация данных
-
-| Уровень | Описание | Таблицы |
-|---|---|---|
-| DR1 (Sacred) | Первоисточники — неизменяемые | bank_transactions, personal_transactions, transactions, records |
-| DR2 (Calculated) | Производные из DR1 | shifts, visit_records, payroll |
-| DR3 (Manual) | Ручной контекст | notes, staff_payment_aliases, obligations |
-
-### Правила
-
-- DR1 таблицы: только INSERT через синхронизацию, запрещён UPDATE/DELETE
-- `payroll.balance` всегда = `total_accrued - total_paid` (триггер БД)
-- Любое изменение payroll логируется в `payroll_audit`
-
-### Триггеры
-
-- `payroll_balance_trigger` — BEFORE INSERT/UPDATE, пересчитывает balance
-- `payroll_audit_trigger` — AFTER UPDATE, пишет в payroll_audit
-
----
-
-## 12. НОВЫЕ ТАБЛИЦЫ (30.04.2026)
-
-### `staff_payment_aliases`
-Маппинг имён мастеров к описаниям в personal_transactions
-
-| Поле | Тип | Описание |
-|---|---|---|
-| staff_name | text | Имя мастера в системе |
-| alias | text | Описание в выписке (например "Александра К.") |
-| company_id | integer | 1166484 |
-
-Текущий маппинг:
-- Мария → Александра К.
-- Александра → Александра Т.
-- Светлана → Светлана Б.
-- Екатерина → Екатерина Б.
-- Анастасия → Анастасия К.
-- Марина → Марина Ц.
-
-### `payroll_audit`
-Лог всех изменений payroll — кто что менял и когда.
-
-### Новые поля в `payroll`
-- `status` text — 'draft' (расчёт сохранён) / 'paid' (выплачено)
-- `offset_amount` integer — зачёт авансов/переплат из предыдущих периодов
-
-### Новые поля в `shifts`
-- `is_visit_only` boolean — выход под запись (не полная смена, shift_pay=0)
-
----
-
-## 13. ПРАВИЛА РАБОТЫ С КОДОМ (обновлено 30.04.2026)
-
-- Данные смотреть **только через SQL в Supabase SQL Editor**
-- Скрипты писать в `/tmp/`: `cat > /tmp/fix.py << 'PYEOF'` → `python3 /tmp/fix.py`
-- zsh ломает heredoc со спецсимволами — всегда использовать файлы в /tmp/
-- Деплой только после локальной проверки на localhost:8000
-- Перед деплоем: `git add` → `git commit` → `git push`
----
-Generated: 2026-04-29
-Source: chat history analysis
-Version: 1.0
-Next review: после каждой новой сессии разработки
----
-
-# AI_PROJECT_BRIEF — Insalon
-
-## 1. PROJECT IDENTITY
-
-- **Название:** Insalon
-- **Тип бизнеса:** SaaS управленческая аналитика для beauty/SPA салонов
-- **Ниша:** HeadSPA + массажный салон (headspa.beauty), Москва
-- **Целевая аудитория:** Владельцы и управляющие beauty/SPA салонов работающих на YCLIENTS CRM
-- **Главная цель:** Управленческий дашборд поверх YCLIENTS — P&L, эффективность мастеров, обязательства, денежный поток
-- **Текущая фаза:** development
-- **Домен:** https://check.moscow (Tilda заглушка)
-- **API:** https://insalon.onrender.com
-- **GitHub:** https://github.com/dvasincom-sketch/insalon
-
----
-
-## 2. TECH STACK
-
-### Frontend
-- **Tabler UI** (Bootstrap 5) — новый дашборд `/v2/` — выбран за профессиональный вид, готовые компоненты
-- **ApexCharts** — графики (выручка по неделям, utilization)
-- **Bootstrap 5** (старый дашборд `/dashboard`) — первый MVP, заменяется на Tabler
-- Vanilla JS (fetch API, без фреймворков)
-
-### Backend
-- **Python 3.11** + **FastAPI** — REST API
-- **Uvicorn** — ASGI сервер
-- **Supabase Python SDK** — клиент БД
-- **httpx** — HTTP клиент для YCLIENTS API
-- **python-dotenv** — конфигурация
-
-### База данных
-- **Supabase PostgreSQL** — https://qtxnpnioobocidbujbja.supabase.co
-- RLS отключён на всех таблицах
-
-### Инфраструктура
-- **Render** — хостинг бэкенда (insalon.onrender.com)
-- **Tilda** — лендинг check.moscow
-- **Mac OS** — локальная разработка, Python venv в `/Users/dmitryvasin/insalon/`
-
-### Внешние интеграции
-- **YCLIENTS API** — основной источник данных (записи, транзакции, клиенты, услуги, сотрудники)
-  - Partner Token: Oh9H0Xglx8Q1c52t2DO4
-  - Company ID: 1166484
-  - Application ID: 41238
-- **Fitmost** — партнёр агрегатор (скидка 35%, платежи следующего месяца)
-- **Аванпост (ЮKassa)** — эквайринг онлайн-платежей
-- **Т-банк** — расчётный счёт ИП + физическая карта
-- **Wildberries** — закупка расходников (физ карта)
-- **Яндекс Аренда** — аренда квартиры (личное)
-
-### Инструменты разработки
-- **VS Code** — редактор
-- **Supabase SQL Editor** — прямые SQL запросы
-- **Git + GitHub** — версионирование
-
----
-
-## 3. ARCHITECTURE MAP
-
-| Модуль | Назначение | Статус | Зависимости |
-|--------|-----------|--------|-------------|
-| `app/main.py` | FastAPI app, роутеры, StaticFiles | done | все роутеры |
-| `app/database.py` | Supabase клиент, save/get функции | done | supabase-py |
-| `app/yclients.py` | YCLIENTS API клиент | done | httpx |
-| `app/analytics.py` | Расчёты инсайтов (summary, revenue, churn, services) | done | supabase |
-| `app/routers/sync.py` | /sync/records, /sync/clients, /sync/all | done | yclients.py |
-| `app/routers/analytics.py` | /analytics/* — все аналитические эндпоинты | done | analytics.py |
-| `app/routers/checks.py` | /checks/ — проверки качества данных | done | supabase |
-| `app/routers/oauth.py` | /connect, /oauth/callback, /auth | done | yclients.py |
-| `app/routers/webhooks.py` | /webhook/yclients, /webhook/disconnect | done | supabase |
-| `static/index.html` | Старый дашборд Bootstrap (MVP) | done | - |
-| `static/v2/index.html` | Новый дашборд Tabler UI | in-progress | ApexCharts |
-| `scripts/import_bank.py` | Импорт выписки ИП (bank_transactions) | done | supabase |
-| `scripts/import_personal.py` | Импорт выписки физ карты (personal_transactions) | done | supabase |
-| Автосинхронизация cron | Ежедневная синхронизация данных | planned | - |
-| Публичное приложение YCLIENTS | Модерация | blocked | YCLIENTS |
-
----
-
-## 4. CURRENT FOCUS
-
-### Разрабатывается сейчас
-**Новый дашборд Tabler UI** (`static/v2/index.html`) + **раздел Сотрудники**
-
-### Реализовано в v2 дашборде
-- ✅ North Star Metric: CM/LH (прибыль на оплаченный час мастера)
-- ✅ KPI карточки: выручка/визиты/клиенты за 30 дней со сравнением
-- ✅ График выручки по неделям с drill-down (клик → транзакции недели)
-- ✅ График Новые vs Повторные клиенты
-- ✅ P&L таблица только по салону (очищена от личных расходов)
-- ✅ Таб Сотрудники → Эффективность (daily коэффициент, абонементы, двойные смены)
-- ✅ Таб Сотрудники → Расписание (календарь с цветами по мастерам)
-- ✅ Таб Сотрудники → Оплата труда (ведомость с фильтрами)
-- ✅ Экран Обязательства (график платежей на месяц)
-
-### В процессе
-- 🔄 Фильтры в ведомости оплаты труда (баг с обновлением данных)
-- 🔄 Сверка payroll с реальными выплатами из выписки
-
-### Заблокировано
-- ❌ Расписание смен из YCLIENTS API — эндпоинт недоступен, решение: таблица `shifts` в Supabase заполняется вручную
-- ❌ Utilization heatmap — заглушка, нужны реальные данные из расписания
-- ❌ Bridge Conversion SPA→Массаж — не реализован
-- ❌ Данные физ карты за ноябрь 2025 — отсутствуют в выписке
-
-### Открытые вопросы
-- Как автоматически определять смены мастеров без ручного ввода?
-- Как учитывать бонусы мастеров в payroll автоматически?
-
----
-
-## 5. DECISIONS LOG
-
-**Решение:** Tabler UI вместо Bootstrap для нового дашборда
-**Причина:** Профессиональный вид, готовые компоненты, Bootstrap 5 основа
-**Альтернативы:** Bootstrap (старый MVP), Keenthemes Metronic (рассматривался)
-**Контекст:** Начало разработки v2
-
----
-
-**Решение:** Выручка из `transactions` (YCLIENTS), не из `records.service_cost`
-**Причина:** `service_cost` не отражает полную сумму (аванс + остаток), транзакции точнее
-**Альтернативы:** `records.service_cost` — отвергнуто из-за неточности
-
----
-
-**Решение:** Абонементы в отчёте мастера = прайс × 0.7 (скидка 30%)
-**Причина:** Клиент платит со скидкой 30% за 5 сеансов, мастер проводит полный сеанс
-**Контекст:** Для P&L — продажа абонемента в день оплаты; для мастера — начисление в день использования
-
----
-
-**Решение:** Выходные с двумя мастерами → выручка / 2 на каждого
-**Причина:** Мастера работают поочерёдно, все записи могут висеть на одном
-**Источник данных:** Таблица `shifts` в Supabase (заполняется вручную по скриншоту расписания)
-
----
-
-**Решение:** Скользящие 30 дней вместо календарного месяца для KPI
-**Причина:** Не зависит от дня месяца, более честное сравнение
-
----
-
-**Решение:** Fitmost выручка учитывается по `period` (месяц визита), не по дате платежа
-**Причина:** Платежи от Fitmost приходят в следующем месяце за предыдущий
-
----
-
-**Решение:** Аренда салона учитывается по `period`, не по дате платежа
-**Причина:** Платёж 25-го числа идёт за следующий месяц (Гилтон)
-
----
-
-**Решение:** Разметка проектов в транзакциях (поле `project`)
-**Причина:** Разделение салона, подкаста, книги, startup для чистого P&L
-**Проекты:** salon, podcast, book, startup, consulting, enzyme, personal, internal
-
----
-
-**Решение:** Пагинация Supabase (fetch_all) для personal_transactions
-**Причина:** По умолчанию возвращает 1000 строк, у нас 2000+ — данные обрезались
-
----
-
-**Решение:** Овердрафт ИП (7032869405) = операционный инструмент салона
-**Причина:** Используется только для кассовых разрывов бизнеса
-**Категории:** тело = `financing`, проценты = `overdraft_interest`
-
----
-
-## 6. ANTI-PATTERNS
-
-- **Не брать выручку из `records.service_cost`** — неточно, не отражает авансы и доплаты
-- **Не использовать `records.service_cost = 0` как "нет выручки"** — это оплата абонементом/сертификатом
-- **Не смешивать личные расходы с бизнесом** — физ карта содержит и личное и бизнес
-- **Не считать выплаты 1-го числа как зарплату текущего месяца** — это выплата за предыдущий
-- **Не использовать дату платежа для аренды и Fitmost** — нужен `period`
-- **Не делать дашборд без пагинации Supabase** — обрезает данные на 1000 строк
-- **Не считать наличные из кассы как аванс мастеру** — это просто способ оплаты клиента
-- **Не использовать `dataPointSelection` в ApexCharts** — не работает, использовать `markerClick` или кликабельные строки таблицы
-- **Не хранить расписание смен только из records** — администратор может не проставить мастера
-- **Не использовать `bootstrap.Modal`** — в Tabler используется `tabler.Modal` или нативный подход
-
----
-
-## 7. GLOSSARY
-
-| Термин | Значение в контексте проекта |
-|--------|------------------------------|
-| CM/LH | Contribution Margin per Labor Hour — прибыль на оплаченный час мастера (North Star) |
-| Fitmost | Партнёр-агрегатор, скидка 35% клиентам, платит в следующем месяце |
-| is_fitmost | Флаг в records — запись создана администратором как дубль Fitmost |
-| period | Поле в bank_transactions — месяц к которому относится платёж (не дата платежа) |
-| Аванпост | Эквайринг ЮKassa для онлайн-платежей салона |
-| Гилтон | ООО "ГИЛТОН" — арендодатель салона, 93 000 ₽/мес, платёж 25-го за след месяц |
-| Живая косметика | ООО "ЛАБОРАТОРИЯ ЖИВАЯ КОСМЕТИКА-ПРО" — поставщик косметики |
-| Двойная смена | Выходной день когда работают 2 мастера, выручка делится поровну |
-| Выход под запись | Мастер выходит на одну конкретную запись, оплата = стоимость услуги |
-| salon/personal/podcast/book/startup | Проекты для разметки транзакций |
-| Обязательства | Таблица `obligations` — периодические и единовременные платежи |
-| Payroll | Таблица `payroll` — ведомость оплаты труда по периодам 1-14 и 15-31 |
-| Shifts | Таблица `shifts` — расписание смен мастеров (заполняется вручную) |
-| Александра Т. | Старший мастер, тренер, 14 смен/мес норма, бонус за старшего |
-| Светлана Б. | Мастер SPA, тренер |
-| Екатерина Б. | Мастер SPA (медицинское образование) |
-| Анастасия К. | Мастер SPA (медицинское образование) |
-| Марина Ц. | Мастер SPA |
-| Мария | Мастер только под запись, оплата день в день на карту |
-| Фарид | Упомянут в контексте наличных выплат |
-
----
-
-## 8. RULES OF ENGAGEMENT
-
-### Роль и экспертиза владельца
-- Дмитрий Васин — основатель/владелец HeadSPA салона и Insalon
-- Предприниматель, не разработчик — понимает бизнес логику глубоко
-- Знает Python базово, умеет запускать команды в терминале
-- Хорошо понимает финансы: P&L, cash flow, unit-экономика
-
-### Стиль общения
-- Прямой, без лишних объяснений
-- Сначала сделать → потом показать результат
-- Все изменения через терминал (не через VS Code вручную)
-- Русский язык
-
-### Формат кода
-- Всегда давать готовые команды для терминала
-- Использовать `python3 - << 'PYEOF'` для Python скриптов
-- Использовать `cat >> file << 'EOF'` для добавления кода
-- После каждого изменения — проверочная команда
-
-### Что НЕ нужно объяснять
-- Что такое SQL, JSON, API
-- Как работает FastAPI/Supabase в целом
-- Базовые концепции P&L, зарплат, аренды
-
-### Частота вопросов
-- Минимум — только когда реально непонятна бизнес-логика
-- Лучше предложить вариант и скорректировать по факту
-
----
-
-## 9. NEXT STEPS
-
-### Ближайшая задача
-Починить фильтры в ведомости оплаты труда (таб "Оплата труда" в разделе Сотрудники) — при выборе сотрудника/месяца данные не обновляются.
-
-**Корень проблемы:** Скорее всего `onchange` вызывает `loadPayroll()` но функция читает значения фильтров до того как DOM обновился, либо есть проблема с `window.payrollLoaded`.
-
-### Что нужно решить перед следующими задачами
-1. Починить фильтры payroll
-2. Загрузить выписку физ карты за ноябрь 2025 (данные отсутствуют)
-3. Перевыпустить partner token YCLIENTS (засвечен в истории)
-
-### Следующие крупные задачи
-1. Utilization heatmap с реальными данными
-2. Bridge Conversion SPA→Массаж
-3. Многоуровневый P&L с проектами
-4. Cash Flow прогноз
-5. Деплой на Render (обновить)
-6. Настроить cron автосинхронизацию
-
----
-
-## SUPABASE TABLES
-
-| Таблица | Описание | Ключевые поля |
-|---------|---------|---------------|
-| salons | Подключённые салоны | company_id, user_token |
-| records | Записи клиентов | attendance, is_fitmost, service_cost, duration, staff_name |
-| clients | База клиентов | is_new, success_visits |
-| transactions | Финансовые операции YCLIENTS | amount, type_title, account, date |
-| bank_transactions | Выписка расчётного счёта ИП | amount, category, project, period, counterparty |
-| personal_transactions | Выписка физ карты | amount, expense_category, project, description |
-| staff | Сотрудники из YCLIENTS | name, specialization |
-| services | Услуги из YCLIENTS | title, price_min, price_max |
-| obligations | Обязательства и долги | type, amount, day_of_month, start_date, end_date |
-| payroll | Ведомость оплаты труда | staff_name, period_start, total_accrued, advance_cash, balance |
-| shifts | Расписание смен | date, staff_name, is_double_shift, shift_pay |
-
-## KEY CREDENTIALS (не хранить в открытом доступе!)
-
-```
-YCLIENTS_PARTNER_TOKEN=Oh9H0Xglx8Q1c52t2DO4  ← ПЕРЕВЫПУСТИТЬ!
-YCLIENTS_COMPANY_ID=1166484
-SUPABASE_URL=https://qtxnpnioobocidbujbja.supabase.co
-```
-
-## API ENDPOINTS
-
-| Эндпоинт | Описание |
-|----------|---------|
-| GET /analytics/summary | KPI за 30 дней |
-| GET /analytics/revenue?weeks=12 | Выручка по неделям |
-| GET /analytics/revenue/detail?date_from=&date_to= | Детализация транзакций |
-| GET /analytics/clients?weeks=12 | Новые vs повторные |
-| GET /analytics/churn?days=45 | Риск оттока |
-| GET /analytics/services | Топ услуги |
-| GET /analytics/pl | P&L по месяцам |
-| GET /analytics/cmph | CM/LH North Star |
-| GET /analytics/staff/daily?days=30 | Эффективность мастеров |
-| GET /analytics/obligations/{year}/{month} | Обязательства на месяц |
-| GET /analytics/payroll?months=6 | Ведомость оплаты труда |
-| GET /analytics/payroll/verify/{year}/{month} | Сверка выплат |
-| GET /analytics/shifts/{year}/{month} | Расписание смен |
-| GET /checks/ | Проверки качества данных |
-| POST /sync/records | Синхронизация записей |
-| POST /sync/all | Полная синхронизация |
-
----
-
-## CONFIDENCE SCORE
-
-| Раздел | Оценка | Что добавить вручную |
-|--------|--------|---------------------|
-| Project Identity | 9/10 | — |
-| Tech Stack | 9/10 | Версии библиотек |
-| Architecture Map | 8/10 | Статусы могут устареть |
-| Current Focus | 9/10 | Обновлять после каждой сессии |
-| Decisions Log | 8/10 | Решения по UX деталям |
-| Anti-Patterns | 9/10 | — |
-| Glossary | 8/10 | Новые термины по мере появления |
-| Rules of Engagement | 9/10 | — |
-| Next Steps | 7/10 | Обновлять после каждой сессии |
-
----
-
-## 14. ПРИНЦИП РАЗРАБОТКИ: "КАЖДАЯ ЦИФРА ДОЛЖНА БЫТЬ ВИДНА"
-### Every Number Must Be Visible (ENMV)
-
-**Автор:** Дмитрий Васин, сессия 01.05.2026
-
-**Суть:** Любые финансовые данные которые существуют в системе — должны быть видны пользователю. Данные не могут "исчезнуть" из интерфейса только потому что сменился период или контекст отображения.
-
-**Правило:** Если данные есть в БД — они отображаются в UI. Если не отображаются — система показывает предупреждение.
-
-**Три уровня реализации:**
-
-| Уровень | Инструмент | Пример |
-|---|---|---|
-| БД | Триггеры, constraints | balance = total_accrued - total_paid (автотриггер) |
-| API | Checks эндпоинт | 7 автопроверок качества данных |
-| UI | Визуальные индикаторы | Оранжевая плашка незакрытого периода, красные ошибки в Статусе |
-
-**Признаки нарушения принципа:**
-- Данные есть в БД но не видны в UI при смене периода/фильтра
-- balance записывается вручную без триггера
-- Ошибки молча существуют без индикации
-
-**Признаки соблюдения:**
-- Оранжевая плашка незакрытых периодов в Расчёт ФОТ
-- Таб Статус проверок с автоматическими проверками
-- Триггер recalc_payroll_balance
-- Audit trail для всех изменений payroll
-
-**Применять при разработке:**
-Перед добавлением любого нового типа данных спросить:
-"Где в UI пользователь увидит эти данные если контекст изменится?"
-
----
-
-## 17. АКТУАЛЬНАЯ ВЕРСИЯ ДАШБОРДА
-
-> Обновлено 01.05.2026
-
-- **v3** (`/v3/`) — АКТУАЛЬНАЯ рабочая версия
-  - JS разбит на 14 модулей в `static/v3/js/`
-  - Единые константы в `config.js`
-  - Все новые фичи разрабатывать в v3
-- **v2** (`/v2/`) — устаревшая версия, оставлена для сравнения
-- **v1** (`/dashboard/`) — MVP, не используется
-
-### Структура v3/js/
-config.js → utils.js → api.js → router.js → pulse.js → pl.js → staff.js → schedule.js → payroll.js → checks.js → obligations.js → modal.js → fot.js → main.js
-
-## Эталонная дизайн-система
-`src/pages/UI.jsx` — единственный источник правды для всех компонентов.
-**Правило:** перед созданием любого нового элемента — смотреть в UI.jsx.
-**Новые компоненты** после одобрения переносятся в UI.jsx.
- 
-### Что есть в UI.jsx (актуально на 2026-05-11)
-| Секция | id |
-|--------|----|
-| Цвета | `colors` |
-| Типографика | `typography` |
-| Иконки (40+) | `icons` |
-| Tooltip / Tip | `tooltip` |
-| Кнопки | `buttons` |
-| Бейджи | `badges` |
-| Инпуты + Chips | `inputs` |
-| Карточки (Sub/Dark/Pass) | `cards` |
-| Nav Moods | `nav-moods` |
-| Live Status | `live-status` |
-| Slot Card (стопка) | `slot-card` |
-| Таймер (normal/urgent) | `timer` |
-| Toggle | `toggle` |
-| Pill / Tag (статусы) | `pills` |
-| Counter +/− + Калькулятор | `counter` |
-| Drawer (right + bottom) | `drawer` |
-| Accordion | `accordion` |
-| Hero (dark + light) | `hero` |
-| Feature-блоки (light + dark) | `features` |
-| Шаги / Нумерация | `steps` |
-| Timeline / Roadmap | `timeline` |
-| Отзывы | `testimonials` |
-| Логотип-строка | `logo-row` |
-| Сетки (2/3/4-col + bento) | `grids` |
-| Таблица сравнения | `comparison-table` |
-| Карточки статей | `article-card` |
-| CTA-секции | `cta` |
-| Форма заявки | `form` |
-| shadcn (Dialog/DatePicker/Select/Toast/Skeleton/Sheet/Tabs/Avatar) | `planned` |
- 
-## Страницы проекта
-| URL | Файл | Layout |
-|-----|------|--------|
-| `/` | `Home.jsx` (inline) | собственный Nav+Footer |
-| `/ui` | `pages/UI.jsx` | без layout |
-| `/about` | `pages/About.jsx` | PageWithLayout |
-| `/pass` | `pages/Pass.jsx` | PageWithLayout |
-| `/partners` | `pages/Partners.jsx` | PageWithLayout |
-| `/privacy` | `pages/Privacy.jsx` | PageWithLayout |
-| `/offer` | `pages/Offer.jsx` | PageWithLayout |
-| `/library` | `pages/Library.jsx` | PageWithLayout |
-| `/research` | `pages/Research.jsx` | PageWithLayout |
-| `/research/dataset` | `pages/Dataset.jsx` | PageWithLayout |
-| `/investor` | `pages/Investorlanding.jsx` | PageWithLayout |
-| `/PartnerLanding` | `pages/PartnerLanding.jsx` | PageWithLayout |
-| `/zone-map` | `pages/ZoneMap.jsx` | standalone (нет Nav/Footer) |
-| `/my-bookings` | `components/MyBookings.jsx` | собственный |
-| `/salon/dashboard` | `pages/SalonDashboard.jsx` | без layout |
-| `/salon/login` | `pages/SalonLogin.jsx` | без layout |
-| `/salon/auth` | `pages/SalonAuth.jsx` | без layout |
-| `/salon/onboarding` | `pages/SalonOnboarding.jsx` | без layout |
-| `/confirm` | `pages/Confirm.jsx` | без layout |
-| `/reset-password` | `pages/ResetPassword.jsx` | без layout |
-| `/connect` | `pages/Connect.jsx` | без layout |
-| `/unsubscribe` | `pages/Unsubscribe.jsx` | без layout |
- 
-## Компоненты
-| Файл | Назначение |
-|------|-----------|
-| `components/Nav.jsx` | Навигация. Лого → `/`. City picker. Auth. |
-| `components/Footer.jsx` | Футер. B2C (левая) + B2B (правая) зоны. |
-| `components/ScrollToTop.jsx` | Скролл вверх + якорный скролл через MutationObserver + sessionStorage |
-| `components/HeroNew.jsx` | Hero главной |
-| `components/BentoGrid.jsx` | id="featured" |
-| `components/AllSlots.jsx` | id="slots" |
-| `components/Ticker.jsx` | Бегущая строка |
-| `components/ValueCard.jsx` | Поиск |
- 
-## Библиотека статей (Library)
-`src/pages/Library.jsx` — список 12 статей, drawer справа (`slideInRight`).
-`src/pages/articles/Article01.jsx` — опубликована (Chen et al. 1998, González 2016).
-`src/pages/articles/Article02.jsx`...`Article12.jsx` — заглушки, готовятся.
- 
-**Именование файлов:** строго `PascalCase` для компонентов/страниц, `camelCase` для хуков/утилит/папок.
-Render (Ubuntu) case-sensitive → нарушение = сломанный деплой.
- 
-## Хуки
-| Файл | Назначение |
-|------|-----------|
-| `hooks/useIsMobile.js` | `window.innerWidth < 768`, resize listener |
-| `hooks/useAnchorScroll.js` | устарел, логика перенесена в ScrollToTop |
- 
-## Якорный скролл между страницами
-`sessionStorage.setItem('scrollTo', id)` → `navigate('/')` →
-`ScrollToTop.jsx` читает ключ, ждёт элемент через `MutationObserver`, скроллит.
- 
-## Footer навигация
-```
-B2C зона (светлее):          B2B зона (темнее):
-• На странице (якоря)        • Партнёрам
-• Сервис:                    • Контакты: hello@lovi.today
-  - О сервисе                • Сотрудничество:
-  - Lovi Pass                  - Инвесторам → /investor
-  - Мои брони                  - Маркетологам → /research
-  - Библиотека → /library      - Исследователям → /research/dataset
-```
- 
-## Аналитика зон (внутренний инструмент)
-`/zone-map` — `ZoneMap.jsx` (standalone, без Nav/Footer).
-Бэкенд: `insalon/routes/zones2gis.js` → прокси к 2GIS Catalog API.
-Env: `DGIS_API_KEY` в `.env` insalon-репо.
-API: `GET https://insalon.onrender.com/api/lovi/zones/search?lat=&lon=&radius=&q=массаж`
- 
-## Правила работы с AI
-1. **Перед генерацией кода** — дать план и ждать подтверждения
-2. **Не трогать** существующий контент если не попросили явно
-3. **Точечные правки** через `str_replace`, не переписывать файл целиком
-4. **Именование:** PascalCase компоненты, camelCase хуки/утилиты
-5. **CSS:** только через CSS-переменные (`var(--accent)` etc.), no hardcode цветов
-6. **Мобайл:** всегда через `useIsMobile()` хук
-7. **Иконки:** только `lucide-react` через `<Icon>` helper, никаких эмодзи
-8. **Коммит после каждого файла:** `git add . && git commit -m "..." && git push`
-
-# Дизайн-система «Quiet Luxury»
-
-```css
---bg:        #FDFCF9   /* Cashmere White */
---dark:      #121A12   /* Deep Forest */
---accent:    #F97316   /* Lovi Orange */
---border:    rgba(18,26,18,0.06)
---secondary: #8F8475   /* Muted Taupe */
-```
-
-Шрифты: Playfair Display (заголовки) + Inter (интерфейс)
-
----
-
-## Архитектура Frontend
-
-### Роуты (App.jsx)
-| Путь | Компонент | Описание |
-|------|-----------|----------|
-| / | Home | Главная: HeroNew → BentoGrid → AllSlots → Hero → ValueCard → Ticker → Footer |
-| /my-bookings | MyBookings | Брони клиента, открывает AuthModal без токена |
-| /confirm | Confirm | Подтверждение оплаты |
-| /reset-password | ResetPassword | Сброс пароля |
-| /connect | Connect | YCLIENTS marketplace connect |
-| /salon/dashboard | SalonDashboard | Кабинет партнёра |
-| /salon/onboarding | SalonOnboarding | Онбординг (устарел, теперь drawer в dashboard) |
-| /salon/login | SalonLogin | Вход в кабинет |
-| /salon/auth | SalonAuth | Magic link авторизация |
-| /about | ComingSoon | О сервисе |
-| /pass | ComingSoon | Lovi Pass |
-| /partners | Partners | Страница для партнёров (полная) |
-| /PartnerLanding | PartnerLanding | Лендинг для первых 50 салонов |
-| /privacy | ComingSoon | Политика конфиденциальности |
-| /offer | ComingSoon | Публичная оферта |
-| /unsubscribe | Unsubscribe | Отписка от email |
-
-### Ключевые компоненты
-- `Nav.jsx` — sticky навигация, AuthModal, CityModal, UserDropdown. authOpen поднят в App.jsx
-- `Footer.jsx` — тёмный (#1C1F1C), якоря #featured/#slots/#about, партнёрские ссылки
-- `BentoGrid.jsx` — featured слоты, Skeleton loader, id="featured"
-- `AllSlots.jsx` — slots-stream, skeleton, id="slots", фильтр по категориям
-- `PartnerForm.jsx` — форма заявки партнёра, пропы: city, dark, expanded
-- `ComingSoon.jsx` — заглушка страницы
-- `constants.js` — единый справочник CATEGORIES и CAT_LABELS
-
-### Якоря главной страницы
-| id | Секция |
-|----|--------|
-| featured | BentoGrid (Лучшее предложение) |
-| slots | AllSlots (Ближайшие окошки) |
-| about | Hero (Поиск скидок) |
-
----
-
-## Архитектура Backend
-
-### Ключевые эндпоинты /api/lovi/
-| Метод | Путь | Описание |
-|-------|------|----------|
-| GET | /featured | BentoGrid — топ слоты, читает published из Supabase |
-| GET | /slots-stream | AllSlots — ближайшие по времени |
-| GET | /slots | Слоты по конкретной услуге и дате |
-| GET | /strategies | Список стратегий салона |
-| PUT | /strategies/{service_id} | Обновить стратегию |
-| POST | /sync-services | Синхронизация услуг из YCLIENTS → Supabase |
-| POST | /book | Бронирование + YooKassa платёж |
-| POST | /city-waitlist | Подписка на открытие в городе |
-| POST | /city-partner | Заявка владельца салона |
-| POST | /connect | Подключение через YCLIENTS маркетплейс |
-| GET | /salon/me | Данные салона + health-check токена |
-| POST | /salon/magic-link | Запрос magic link |
-| GET | /salon/auth | Верификация magic link → JWT |
-| POST | /bookings/{id}/cancel | Отмена брони клиентом |
-
----
-
-## Supabase — ключевые таблицы
-
-### service_strategies
-Главная таблица управления витриной.
-id, company_id, service_id, service_name, category,
-strategy_name, status (published/draft),
-threshold_far, threshold_near,
-coeff_far, coeff_near, coeff_hot,
-duration_min, display_order, updated_at
-
-**Категории:** head, spa, back, neck, body, face
-**Стратегии:** premium, popular, step, custom
-**Статусы:** published (показывается на витрине), draft (скрыто)
-
-### Логика стратегий скидок
-Универсальная формула:
-hours > threshold_far  → base_price * coeff_far
-hours > threshold_near → base_price * coeff_near
-else                   → base_price * coeff_hot
-
-Пресеты:
-| Стратегия | threshold_far | threshold_near | coeff_hot |
-|-----------|--------------|----------------|-----------|
-| premium   | 48ч          | 24ч            | 0.60      |
-| popular   | 48ч          | 24ч            | 0.65      |
-| step      | 24ч          | 1ч             | 0.60      |
-
-### Другие таблицы
-- `salons` — данные салонов, YCLIENTS токены, token_status
-- `bookings` — брони: status (pending/waiting_payment/confirmed/cancelled_by_client)
-- `users` — клиенты, lovi_balance
-- `balance_transactions` — история баланса
-- `city_waitlist` — подписки на открытие в городе
-- `city_partner_requests` — заявки партнёров
-- `salon_magic_links` — magic link токены
-
----
-
-## YCLIENTS интеграция
-
-**COMPANY_ID:** 1166484 (Head SPA Beauty, Беляево)
-
-### Whitelist категорий для sync-services
-| category_id YCLIENTS | Наша категория |
-|---------------------|----------------|
-| 27323178 | spa |
-| 19468178 | head |
-| 19658180 | back |
-| 27461844 | spa |
-
-**Исключённые service_id:** 22296048, 22296054, 22296057 (архив)
-
-### Важные нюансы
-- Сервер на UTC, слоты приходят в +03:00 — timezone обрабатывается корректно
-- `seance_length` из YCLIENTS ненадёжен — используем `duration_min` из Supabase
-- gap_minutes=60 — минимальный гэп до слота для показа на витрине
-
----
-
-## Salon Dashboard (/salon/dashboard)
-
-### Функциональность
-- Список published/draft услуг по категориям
-- Drag-and-drop порядка (display_order)
-- Смена категории через select
-- Toggle published/draft на каждой услуге
-- Кнопка «Обновить из YCLIENTS» → sync-services
-- **StrategyDrawer** — глобальная стратегия (4 шага: приоритет → скидка → горизонт → услуги)
-- **ServiceDrawer** — точечные настройки одной услуги (кнопка «Настроить» на каждой строке)
-
-### Пресеты скидок в drawer
-| id | label | coeff_hot |
-|----|-------|-----------|
-| soft | До 20% | 0.82 |
-| balanced | До 35% | 0.65 |
-| aggressive | До 45% | 0.55 |
-| max | Более 50% | 0.45 |
-
----
-
-## Известные проблемы и ограничения
-
-1. **Витрина показывает только published услуги** — если нет published, вернёт пустой список
-2. **Дубли услуг** — два «Индийский миофасциальный массаж» (27937128, 27937491), два «Весна: 9 трав» (26522085, 26949774) — нужно дать возможность скрывать
-3. **YooKassa refund** при отмене клиентом не реализован (только баланс Lovi)
-4. **Баланс Lovi** в /my-bookings не отображается
-5. **Бандл 613 КБ** — нужен lazy loading страниц
-
----
-
-## Беклог (приоритеты)
-
-### P0
-- [ ] YooKassa refund при отмене клиентом
-- [ ] Баланс Lovi в /my-bookings
-
-### P1
-- [ ] Скрытие дублей услуг в dashboard
-- [ ] Кабинет партнёра — статистика броней и выручки
-- [ ] Lazy loading страниц (бандл оптимизация)
-- [ ] Автотесты booking flow
-
-### P2
-- [ ] UI Library страница — полная библиотека компонентов из /ui
-- [ ] Поиск и фильтры в HeroNew — пока не функциональны
-- [ ] Топ по отзывам — рейтинги мастеров из YCLIENTS
-- [ ] Cron email триггеры — reminder за день, review request после визита
-- [ ] Telegram бот — алерты горящих окошек
-- [ ] Geolocation — расстояние до салона
-- [ ] Масштабирование на несколько салонов (убрать хардкод COMPANY_ID)
+### Последние сессии
+| Дата | Фича | Мин | Токены |
+|------|------|-----|--------|
+| 2026-05-27 | Парные программы fix + Ideas раздел + P&L подкаст + Обязательства авансы | 240 | 180 000 |

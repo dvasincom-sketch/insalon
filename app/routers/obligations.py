@@ -189,6 +189,26 @@ async def get_summary():
         second_half = [p for p in fot_data.data if p["period_start"].endswith("-15")]
         fot_first_half_total  = sum(float(p["total_accrued"] or 0) for p in first_half)
         fot_second_half_total = sum(float(p["total_accrued"] or 0) for p in second_half)
+        # Вычитаем авансы за 2-ю половину месяца
+        import calendar as _cal
+        last_day = _cal.monthrange(now.year, now.month)[1]
+        period_start_2 = f"{now.year}-{now.month:02d}-15"
+        period_end_2   = f"{now.year}-{now.month:02d}-{last_day:02d}"
+        aliases = supabase.table("staff_payment_aliases").select("alias").eq(
+            "company_id", COMPANY_ID
+        ).execute()
+        alias_set = {a["alias"] for a in aliases.data}
+        advances_data = supabase.table("personal_transactions").select(
+            "amount, description"
+        ).eq("company_id", COMPANY_ID).gte("date", period_start_2).lte(
+            "date", period_end_2
+        ).lt("amount", 0).execute()
+        advances_second_half = sum(
+            abs(float(t["amount"] or 0))
+            for t in advances_data.data
+            if t.get("description") in alias_set
+        )
+        fot_second_half_total = max(0, fot_second_half_total - advances_second_half)
         if first_half and all(p["status"] == "paid" for p in first_half):
             fot_first_half_paid = True
         if second_half and all(p["status"] == "paid" for p in second_half):

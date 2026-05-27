@@ -299,6 +299,27 @@ async def obligations_for_month(year: int, month: int):
             "company_id", COMPANY_ID
         ).eq("is_active", True).execute()
         
+        # Авансы за 2-ю половину месяца (для вычета из обязательства на 1-е)
+        import calendar as _cal
+        last_day = _cal.monthrange(year, month)[1]
+        period_start_2 = f"{year}-{month:02d}-15"
+        period_end_2   = f"{year}-{month:02d}-{last_day:02d}"
+        advances_data = supabase.table("personal_transactions").select(
+            "amount, description"
+        ).eq("company_id", COMPANY_ID).gte("date", period_start_2).lte(
+            "date", period_end_2
+        ).lt("amount", 0).execute()
+        # Алиасы сотрудников
+        aliases = supabase.table("staff_payment_aliases").select("alias").eq(
+            "company_id", COMPANY_ID
+        ).execute()
+        alias_set = {a["alias"] for a in aliases.data}
+        total_advances = sum(
+            abs(float(t["amount"] or 0))
+            for t in advances_data.data
+            if t.get("description") in alias_set
+        )
+
         obligations = []
         for o in result.data:
             start = date.fromisoformat(o["start_date"]) if o.get("start_date") else None
@@ -309,15 +330,24 @@ async def obligations_for_month(year: int, month: int):
                 continue
             if end and end < target_date:
                 continue
-                
+
+            amount = float(o["amount"] or 0)
+            notes = o["notes"] or ""
+
+            # Для ЗП на 1-е вычитаем авансы за 2-ю половину
+            if o.get("day_of_month") == 1 and o.get("expense_category") == "salary" and total_advances > 0:
+                amount = max(0, amount - total_advances)
+                notes = f"ФОТ 15–{last_day}: {round(float(o['amount']))} − авансы {round(total_advances)} = {round(amount)}"
+
             obligations.append({
                 "description": o["description"],
-                "amount": o["amount"],
+                "amount": round(amount),
                 "day_of_month": o["day_of_month"],
                 "type": o["type"],
                 "project": o["project"],
                 "expense_category": o["expense_category"],
-                "notes": o["notes"]
+                "notes": notes,
+                "id": o["id"],
             })
         
         # Сортируем по дню месяца

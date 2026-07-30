@@ -1,6 +1,7 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Header
 from app.database import supabase
 import os
+import re
 
 router = APIRouter(prefix="/api/booking", tags=["Виджет записи"])
 
@@ -202,6 +203,59 @@ async def get_nearest_slot(duration: int, service_id: int = 0):
             return {"date": date, "time": times[0]["time"]}
 
     return {"date": None, "time": None}
+
+def _norm_phone(raw: str) -> str:
+    """Приводим телефон к виду 7XXXXXXXXXX — в базе номера лежат в разном формате."""
+    d = re.sub(r"\D", "", raw or "")
+    if len(d) == 11 and d.startswith("8"):
+        d = "7" + d[1:]
+    if len(d) == 10:
+        d = "7" + d
+    return d
+
+
+@router.get("/active")
+async def get_active_bookings(phone: str, x_internal_key: str = Header(None)):
+    """Активные (будущие) записи по номеру телефона.
+
+    Персональные данные, поэтому только для внутренних сервисов — по ключу
+    INTERNAL_API_KEY в заголовке X-Internal-Key.
+    """
+    expected = os.getenv("INTERNAL_API_KEY")
+    if not expected:
+        raise HTTPException(503, "INTERNAL_API_KEY не задан")
+    if x_internal_key != expected:
+        raise HTTPException(401, "Требуется внутренний ключ")
+
+    target = _norm_phone(phone)
+    if len(target) != 11:
+        raise HTTPException(400, "Некорректный номер телефона")
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    rows = supabase.table("bookings").select(
+        "id, service_title, datetime, duration, master_name, total_price, status, booking_code, client_name, client_phone"
+    ).eq("company_id", COMPANY_ID).gte("datetime", today).order("datetime").limit(300).execute().data or []
+
+    dead = ("cancelled", "canceled", "отменено")
+    items = []
+    for r in rows:
+        if _norm_phone(r.get("client_phone", "")) != target:
+            continue
+        if str(r.get("status", "")).lower() in dead:
+            continue
+        items.append({
+            "id": r.get("id"),
+            "service_title": r.get("service_title"),
+            "datetime": r.get("datetime"),
+            "duration": r.get("duration"),
+            "master_name": r.get("master_name"),
+            "total_price": r.get("total_price"),
+            "status": r.get("status"),
+            "client_name": r.get("client_name"),
+        })
+
+    return {"count": len(items), "items": items}
+
 
 @router.get("/{booking_id}")
 async def get_booking(booking_id: int):

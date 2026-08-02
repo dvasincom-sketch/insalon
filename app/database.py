@@ -7,7 +7,12 @@ load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+DB_BACKEND = os.getenv("DB_BACKEND", "supabase").lower()
+if DB_BACKEND == "postgres":
+    # синхронный шим над управляемым Postgres (тот же интерфейс, что supabase-py)
+    from app.pg import supabase
+else:
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 async def save_salon(company_id: int, user_token: str, company_data: dict):

@@ -62,3 +62,5 @@ pydantic[email]
 resend
 
 python-multipart>=0.0.9
+psycopg[binary]
+psycopg_pool

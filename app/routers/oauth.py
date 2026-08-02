@@ -9,7 +9,7 @@ import hmac
 router = APIRouter(tags=["OAuth и подключение"])
 
 PARTNER_TOKEN = os.getenv("YCLIENTS_PARTNER_TOKEN", "").strip()
-COMPANY_ID = int(os.getenv("YCLIENTS_COMPANY_ID"))
+from app.salon import DEFAULT_COMPANY_ID as COMPANY_ID
 
 
 @router.get(

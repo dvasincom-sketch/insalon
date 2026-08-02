@@ -4,7 +4,7 @@ import os
 
 router = APIRouter(prefix="/checks", tags=["Проверки данных"])
 
-COMPANY_ID = int(os.getenv("YCLIENTS_COMPANY_ID"))
+from app.salon import DEFAULT_COMPANY_ID as COMPANY_ID
 
 
 @router.get("/", summary="Все проверки", description="Запускает все проверки данных и возвращает список расхождений.")

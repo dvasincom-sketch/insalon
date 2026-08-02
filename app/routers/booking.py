@@ -5,7 +5,7 @@ import re
 
 router = APIRouter(prefix="/api/booking", tags=["Виджет записи"])
 
-COMPANY_ID = int(os.getenv("YCLIENTS_COMPANY_ID"))
+from app.salon import DEFAULT_COMPANY_ID as COMPANY_ID
 
 @router.get("/categories")
 async def get_categories():

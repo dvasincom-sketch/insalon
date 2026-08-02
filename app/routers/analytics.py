@@ -14,7 +14,7 @@ import calendar as cal_module
 
 router = APIRouter(prefix="/analytics", tags=["Аналитика"])
 
-COMPANY_ID = int(os.getenv("YCLIENTS_COMPANY_ID"))
+from app.salon import DEFAULT_COMPANY_ID as COMPANY_ID
 
 
 def fetch_all(supabase, query_fn):

@@ -5,7 +5,7 @@ from typing import Optional
 import os
 
 router = APIRouter(prefix="/payroll", tags=["Payroll"])
-COMPANY_ID = int(os.getenv("YCLIENTS_COMPANY_ID"))
+from app.salon import DEFAULT_COMPANY_ID as COMPANY_ID
 
 class PayrollUpsert(BaseModel):
     staff_name: str

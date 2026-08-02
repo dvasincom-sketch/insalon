@@ -9,7 +9,7 @@ from datetime import datetime, timezone, timedelta, date as dt_module
 
 router = APIRouter(prefix="/api/lovi", tags=["lovi"])
 
-COMPANY_ID = 1166484
+from app.salon import DEFAULT_COMPANY_ID as COMPANY_ID
 
 def get_user_token():
     res = supabase.table("salons").select("user_token").eq("company_id", COMPANY_ID).limit(1).execute()

@@ -6,7 +6,7 @@ from datetime import date, datetime
 import os, io, csv
 
 router = APIRouter(prefix="/obligations", tags=["Obligations"])
-COMPANY_ID = int(os.getenv("YCLIENTS_COMPANY_ID"))
+from app.salon import DEFAULT_COMPANY_ID as COMPANY_ID
 
 class ObligationCreate(BaseModel):
     type: str = "fixed"

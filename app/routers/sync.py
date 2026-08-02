@@ -10,7 +10,7 @@ import os
 
 router = APIRouter(prefix="/sync", tags=["Синхронизация"])
 
-COMPANY_ID = int(os.getenv("YCLIENTS_COMPANY_ID"))
+from app.salon import DEFAULT_COMPANY_ID as COMPANY_ID
 
 
 async def sync_company_data(company_id: int, user_token: str, months: int = 12, date_from: str = None, date_to: str = None):

@@ -1,5 +1,5 @@
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
@@ -51,7 +51,7 @@ app.include_router(lovi.router)
 app.include_router(auth.router)
 app.include_router(obligations.router)
 
-# Статические файлы дашборда
+# Статические файлы дашборда (legacy)
 if os.path.exists("static"):
     app.mount("/dashboard", StaticFiles(directory="static", html=True), name="static")
 if os.path.exists("static/v2"):
@@ -63,6 +63,41 @@ if os.path.exists("static/booking/dist"):
     app.mount("/booking", StaticFiles(directory="static/booking/dist", html=True), name="booking")
 
 
-@app.get("/", tags=["Система"])
-async def root():
+@app.get("/healthz", tags=["Система"])
+async def healthz():
     return {"status": "ok", "project": "Insalon", "version": "1.0.0"}
+
+
+# --- Раздача React-фронта (single-app). Каталог задаётся WEB_DIR;
+#     Dockerfile кладёт сюда собранный lovi-web/dist. Без WEB_DIR корень
+#     отвечает JSON'ом как раньше (обратная совместимость / API-only режим). ---
+WEB_DIR = os.getenv("WEB_DIR", "web")
+
+if os.path.isdir(WEB_DIR):
+    _assets_dir = os.path.join(WEB_DIR, "assets")
+    if os.path.isdir(_assets_dir):
+        app.mount("/assets", StaticFiles(directory=_assets_dir), name="web_assets")
+
+    # Первые сегменты путей, которые НЕ отдаём как SPA (API и служебное)
+    _NON_SPA = {
+        "api", "sync", "analytics", "payments", "payroll", "checks",
+        "obligations", "dev-sessions", "webhook", "dashboard", "v2", "v3",
+        "booking", "docs", "redoc", "openapi.json", "assets", "healthz",
+    }
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa(full_path: str):
+        head = full_path.split("/", 1)[0]
+        if head in _NON_SPA:
+            raise HTTPException(status_code=404)
+        candidate = os.path.join(WEB_DIR, full_path)
+        if full_path and os.path.isfile(candidate):
+            return FileResponse(candidate)
+        index = os.path.join(WEB_DIR, "index.html")
+        if os.path.isfile(index):
+            return FileResponse(index)
+        raise HTTPException(status_code=404)
+else:
+    @app.get("/", tags=["Система"])
+    async def root():
+        return {"status": "ok", "project": "Insalon", "version": "1.0.0"}

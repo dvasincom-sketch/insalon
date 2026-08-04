@@ -13,7 +13,7 @@ from app.salon import DEFAULT_COMPANY_ID as COMPANY_ID
 
 def get_user_token():
     res = supabase.table("salons").select("user_token").eq("company_id", COMPANY_ID).limit(1).execute()
-    return res.data["user_token"]
+    return res.data[0]["user_token"] if res.data else ""
 
 
 # ── Стратегии ──────────────────────────────────────────────────────────────

@@ -11,6 +11,9 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
 from psycopg_pool import ConnectionPool
+from datetime import date as _date, datetime as _datetime, time as _time
+from decimal import Decimal as _Decimal
+from uuid import UUID as _UUID
 
 
 def _dsn():
@@ -34,6 +37,17 @@ def _get_pool():
 
 def _val(v):
     return Json(v) if isinstance(v, (dict, list)) else v
+
+
+def _jsonify(v):
+    """Привести типы psycopg к JSON-виду Supabase: даты->ISO-строки, Decimal->число, UUID->str."""
+    if isinstance(v, (_datetime, _date, _time)):
+        return v.isoformat()
+    if isinstance(v, _Decimal):
+        return int(v) if v == v.to_integral_value() else float(v)
+    if isinstance(v, _UUID):
+        return str(v)
+    return v
 
 
 _OPMAP = {"eq": "=", "neq": "<>", "gt": ">", "gte": ">=", "lt": "<", "lte": "<=",
@@ -182,6 +196,7 @@ class _Query:
             with conn.cursor() as cur:
                 cur.execute(sql, params)
                 rows = cur.fetchall() if cur.description else []
+        rows = [{k: _jsonify(v) for k, v in r.items()} for r in rows]
         if self._single:
             return _Result(rows[0] if rows else None)
         return _Result(rows)

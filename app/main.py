@@ -66,7 +66,21 @@ if os.path.isdir(_p("static", "booking", "dist")):
 
 @app.get("/healthz", tags=["Система"])
 async def healthz():
-    return {"status": "ok", "project": "Insalon", "version": "1.0.0"}
+    return {"status": "ok", "project": "Insalon", "version": "diag-1"}
+
+
+@app.get("/__diag", include_in_schema=False)
+async def __diag():
+    return {
+        "version": "diag-1",
+        "cwd": os.getcwd(),
+        "base_dir": BASE_DIR,
+        "base_listdir": sorted(os.listdir(BASE_DIR))[:60],
+        "has_static": os.path.isdir(_p("static")),
+        "has_static_v3": os.path.isdir(_p("static", "v3")),
+        "web_dir": WEB_DIR,
+        "has_web": os.path.isdir(WEB_DIR),
+    }
 
 
 # Раздача React-фронта (single-app). WEB_DIR задаётся Dockerfile'ом; дефолт — от корня репо.

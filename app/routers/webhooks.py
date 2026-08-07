@@ -1,8 +1,24 @@
 from fastapi import APIRouter, Request
 from app.database import deactivate_salon
 import json
+import os
+import logging
+import httpx
 
 router = APIRouter(prefix="/webhook", tags=["Вебхуки YCLIENTS"])
+
+
+async def _forward_to_asya(body: dict):
+    """Проброс события Yclients в Асю (триггерные сообщения). No-op, если ASYA_TRIGGERS_URL не задан."""
+    url = os.getenv("ASYA_TRIGGERS_URL", "").strip()
+    if not url:
+        return
+    secret = os.getenv("ASYA_TRIGGERS_SECRET", "").strip()
+    try:
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            await client.post(url, params={"secret": secret} if secret else None, json=body)
+    except Exception as e:
+        logging.warning(f"[asya] forward failed: {e}")
 
 
 @router.post(
@@ -17,6 +33,10 @@ async def webhook_yclients(request: Request):
     resource = body.get("resource")
     status = body.get("status")
     data = body.get("data", {})
+
+    # Проброс в Асю — на все события записи (create/edit/delete). Ася сама решит, что делать.
+    if resource == "record":
+        await _forward_to_asya(body)
 
     if resource != "record":
         return {"status": "ok"}

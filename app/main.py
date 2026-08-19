@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
@@ -25,6 +25,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Хосты «кабинета insalon»: на них корень открывает дашборд, а не лендинг lovi.
+CRM_HOSTS = {h.strip() for h in os.getenv("CRM_HOSTS", "insalon.lovi.today").split(",") if h.strip()}
+
+
+@app.middleware("http")
+async def _crm_root_to_dashboard(request, call_next):
+    host = request.headers.get("host", "").split(":")[0]
+    if host in CRM_HOSTS and request.url.path == "/":
+        return RedirectResponse(url="/v3/", status_code=302)
+    return await call_next(request)
 
 class UTF8JSONResponse(JSONResponse):
     media_type = "application/json; charset=utf-8"
